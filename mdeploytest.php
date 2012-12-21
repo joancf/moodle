@@ -27,6 +27,7 @@
  * @copyright   2012 David Mudrak <david@moodle.com>
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+// another commit
 
 require(__DIR__.'/mdeploy.php');
 
