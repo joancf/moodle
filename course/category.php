@@ -61,6 +61,12 @@ $context = $PAGE->context;
 // And the object has been loaded for us no need for another DB call
 $category = $PAGE->category;
 
+// This needs to match caps checked in can_edit_in_category below.
+$PAGE->set_other_editing_capability(array(
+    'moodle/category:manage',
+    'moodle/course:create'
+));
+
 $canedit = can_edit_in_category($category->id);
 if ($canedit) {
     if ($categoryedit !== -1) {
@@ -144,6 +150,7 @@ if ($editingon && $sesskeyprovided) {
             require_capability('moodle/course:visibility', $coursecontext);
             // Set the visibility of the course. we set the old flag when user manually changes visibility of course.
             $DB->update_record('course', array('id' => $course->id, 'visible' => $visible, 'visibleold' => $visible, 'timemodified' => time()));
+            add_to_log($course->id, "course", ($visible ? 'show' : 'hide'), "edit.php?id=$course->id", $course->id);
         }
     }
 
@@ -172,6 +179,7 @@ if ($editingon && $sesskeyprovided) {
             }
             $DB->set_field('course', 'sortorder', $swapcourse->sortorder, array('id' => $movecourse->id));
             $DB->set_field('course', 'sortorder', $movecourse->sortorder, array('id' => $swapcourse->id));
+            add_to_log($movecourse->id, "course", "move", "edit.php?id=$movecourse->id", $movecourse->id);
         }
     }
 
@@ -191,6 +199,7 @@ if ($editingon && can_edit_in_category()) {
     // Integrate into the admin tree only if the user can edit categories at the top level,
     // otherwise the admin block does not appear to this user, and you get an error.
     require_once($CFG->libdir . '/adminlib.php');
+    navigation_node::override_active_url(new moodle_url('/course/category.php', array('id' => $id)));
     admin_externalpage_setup('coursemgmt', '', $urlparams, $CFG->wwwroot . '/course/category.php');
     $PAGE->set_context($context);   // Ensure that we are actually showing blocks etc for the cat context
 
@@ -439,8 +448,11 @@ if (!$courses) {
         $movetocategories[$category->id] = get_string('moveselectedcoursesto');
         echo '<tr><td colspan="3" align="right">';
         echo html_writer::label(get_string('moveselectedcoursesto'), 'movetoid', false, array('class' => 'accesshide'));
-        echo html_writer::select($movetocategories, 'moveto', $category->id, null, array('id'=>'movetoid'));
-        $PAGE->requires->js_init_call('M.util.init_select_autosubmit', array('movecourses', 'movetoid', false));
+        echo html_writer::select($movetocategories, 'moveto', $category->id, null, array('id'=>'movetoid', 'class' => 'autosubmit'));
+        $PAGE->requires->yui_module('moodle-core-formautosubmit',
+            'M.core.init_formautosubmit',
+            array(array('selectid' => 'movetoid', 'nothing' => $category->id))
+        );
         echo '<input type="hidden" name="id" value="'.$category->id.'" />';
         echo '</td></tr>';
     }

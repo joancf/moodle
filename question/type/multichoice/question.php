@@ -126,10 +126,10 @@ abstract class qtype_multichoice_base extends question_graded_automatically {
     }
 
     public function make_html_inline($html) {
-        $html = preg_replace('~\s*<p>\s*~', '', $html);
-        $html = preg_replace('~\s*</p>\s*~', '<br />', $html);
-        $html = preg_replace('~<br />$~', '', $html);
-        return $html;
+        $html = preg_replace('~\s*<p>\s*~u', '', $html);
+        $html = preg_replace('~\s*</p>\s*~u', '<br />', $html);
+        $html = preg_replace('~(<br\s*/?>)+$~u', '', $html);
+        return trim($html);
     }
 }
 
@@ -338,7 +338,7 @@ class qtype_multichoice_multi_question extends qtype_multichoice_base {
     public function is_same_response(array $prevresponse, array $newresponse) {
         foreach ($this->order as $key => $notused) {
             $fieldname = $this->field($key);
-            if (!question_utils::arrays_same_at_key($prevresponse, $newresponse, $fieldname)) {
+            if (!question_utils::arrays_same_at_key_integer($prevresponse, $newresponse, $fieldname)) {
                 return false;
             }
         }

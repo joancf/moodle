@@ -106,6 +106,14 @@ if (!empty($new)){
     $type = repository::get_type_by_id($instance->options['typeid']);
 }
 
+// The context passed MUST match the context of the repository. And as both have to be
+// similar, this also ensures that the context is either a user one, or a course one.
+if (!empty($instance)) {
+    if ($instance->instance->contextid != $context->id) {
+        print_error('invalidcontext');
+    }
+}
+
 if (isset($type)) {
     if (!$type->get_visible()) {
         print_error('typenotvisible', 'repository', $baseurl);
@@ -134,7 +142,6 @@ $title = $pagename;
 /// Display page header
 $PAGE->set_title($title);
 $PAGE->set_heading($fullname);
-echo $OUTPUT->header();
 
 if ($context->contextlevel == CONTEXT_USER) {
     if ( !$course = $DB->get_record('course', array('id'=>$usercourseid))) {
@@ -150,6 +157,8 @@ if (!empty($edit) || !empty($new)) {
         if ($instance->readonly) {
             throw new repository_exception('readonlyinstance', 'repository');
         }
+        // Check if we can read the content of the repository, if not exception is thrown.
+        $instance->check_capability();
         $instancetype = repository::get_type_by_id($instance->options['typeid']);
         $classname = 'repository_' . $instancetype->get_typename();
         $configs  = $instance->get_instance_option_names();
@@ -177,7 +186,7 @@ if (!empty($edit) || !empty($new)) {
             $settings = array();
             $settings['name'] = $fromform->name;
             foreach($configs as $config) {
-                $settings[$config] = $fromform->$config;
+                $settings[$config] = isset($fromform->$config) ? $fromform->$config : null;
             }
             $success = $instance->set_option($settings);
         } else {
@@ -186,13 +195,13 @@ if (!empty($edit) || !empty($new)) {
         }
         if ($success) {
             $savedstr = get_string('configsaved', 'repository');
-            echo $OUTPUT->heading($savedstr);
             redirect($baseurl);
         } else {
             print_error('instancenotsaved', 'repository', $baseurl);
         }
         exit;
     } else {     // Display the form
+        echo $OUTPUT->header();
         echo $OUTPUT->heading(get_string('configplugin', 'repository_'.$plugin));
         $OUTPUT->box_start();
         $mform->display();
@@ -206,24 +215,27 @@ if (!empty($edit) || !empty($new)) {
     if ($instance->readonly) {
         throw new repository_exception('readonlyinstance', 'repository');
     }
+    // Check if we can read the content of the repository, if not exception is thrown.
+    $instance->check_capability();
     if ($sure) {
         if (!confirm_sesskey()) {
             print_error('confirmsesskeybad', '', $baseurl);
         }
         if ($instance->delete()) {
             $deletedstr = get_string('instancedeleted', 'repository');
-            echo $OUTPUT->heading($deletedstr);
             redirect($baseurl, $deletedstr, 3);
         } else {
             print_error('instancenotdeleted', 'repository', $baseurl);
         }
         exit;
     }
+    echo $OUTPUT->header();
     $formcontinue = new single_button(new moodle_url($baseurl, array('delete' => $delete, 'sure' => 'yes')), get_string('yes'));
     $formcancel = new single_button($baseurl, get_string('no'));
     echo $OUTPUT->confirm(get_string('confirmdelete', 'repository', $instance->name), $formcontinue, $formcancel);
     $return = false;
 } else {
+    echo $OUTPUT->header();
     repository::display_instances_list($context);
     $return = false;
 }

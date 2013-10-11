@@ -826,7 +826,11 @@ class available_update_checker {
         require_once($CFG->libdir.'/filelib.php');
 
         $curl = new curl(array('proxy' => true));
-        $response = $curl->post($this->prepare_request_url(), $this->prepare_request_params());
+        $response = $curl->post($this->prepare_request_url(), $this->prepare_request_params(), $this->prepare_request_options());
+        $curlerrno = $curl->get_errno();
+        if (!empty($curlerrno)) {
+            throw new available_update_checker_exception('err_response_curl', 'cURL error '.$curlerrno.': '.$curl->error);
+        }
         $curlinfo = $curl->get_info();
         if ($curlinfo['http_code'] != 200) {
             throw new available_update_checker_exception('err_response_http_code', $curlinfo['http_code']);
@@ -993,7 +997,7 @@ class available_update_checker {
         if (!empty($CFG->config_php_settings['alternativeupdateproviderurl'])) {
             return $CFG->config_php_settings['alternativeupdateproviderurl'];
         } else {
-            return 'http://download.moodle.org/api/1.1/updates.php';
+            return 'https://download.moodle.org/api/1.1/updates.php';
         }
     }
 
@@ -1067,6 +1071,29 @@ class available_update_checker {
         }
 
         return $params;
+    }
+
+    /**
+     * Returns the list of cURL options to use when fetching available updates data
+     *
+     * @return array of (string)param => (string)value
+     */
+    protected function prepare_request_options() {
+        global $CFG;
+
+        $options = array(
+            'CURLOPT_SSL_VERIFYHOST' => 2,      // this is the default in {@link curl} class but just in case
+            'CURLOPT_SSL_VERIFYPEER' => true,
+        );
+
+        $cacertfile = $CFG->dataroot.'/moodleorgca.crt';
+        if (is_readable($cacertfile)) {
+            // Do not use CA certs provided by the operating system. Instead,
+            // use this CA cert to verify the updates provider.
+            $options['CURLOPT_CAINFO'] = $cacertfile;
+        }
+
+        return $options;
     }
 
     /**
@@ -1223,19 +1250,28 @@ class available_update_checker {
                 foreach ($componentupdates as $componentupdate) {
                     if ($componentupdate->version == $componentchange['version']) {
                         if ($component == 'core') {
-                            // in case of 'core' this is enough, we already know that the
-                            // $componentupdate is a real update with higher version
-                            $notifications[] = $componentupdate;
+                            // In case of 'core', we already know that the $componentupdate
+                            // is a real update with higher version ({@see self::get_update_info()}).
+                            // We just perform additional check for the release property as there
+                            // can be two Moodle releases having the same version (e.g. 2.4.0 and 2.5dev shortly
+                            // after the release). We can do that because we have the release info
+                            // always available for the core.
+                            if ((string)$componentupdate->release === (string)$componentchange['release']) {
+                                $notifications[] = $componentupdate;
+                            }
                         } else {
-                            // use the plugin_manager to check if the reported $componentchange
-                            // is a real update with higher version. such a real update must be
-                            // present in the 'availableupdates' property of one of the component's
-                            // available_update_info object
+                            // Use the plugin_manager to check if the detected $componentchange
+                            // is a real update with higher version. That is, the $componentchange
+                            // is present in the array of {@link available_update_info} objects
+                            // returned by the plugin's available_updates() method.
                             list($plugintype, $pluginname) = normalize_component($component);
-                            if (!empty($plugins[$plugintype][$pluginname]->availableupdates)) {
-                                foreach ($plugins[$plugintype][$pluginname]->availableupdates as $availableupdate) {
-                                    if ($availableupdate->version == $componentchange['version']) {
-                                        $notifications[] = $componentupdate;
+                            if (!empty($plugins[$plugintype][$pluginname])) {
+                                $availableupdates = $plugins[$plugintype][$pluginname]->available_updates();
+                                if (!empty($availableupdates)) {
+                                    foreach ($availableupdates as $availableupdate) {
+                                        if ($availableupdate->version == $componentchange['version']) {
+                                            $notifications[] = $componentupdate;
+                                        }
                                     }
                                 }
                             }
@@ -1562,6 +1598,10 @@ class available_update_deployer {
             $impediments['missingdownloadmd5'] = true;
         }
 
+        if (!empty($info->download) and !$this->update_downloadable($info->download)) {
+            $impediments['notdownloadable'] = true;
+        }
+
         if (!$this->component_writable($info->component)) {
             $impediments['notwritable'] = true;
         }
@@ -1659,6 +1699,28 @@ class available_update_deployer {
             'password' => $password,
             'returnurl' => $upgradeurl->out(true),
         );
+
+        if (!empty($CFG->proxyhost)) {
+            // MDL-36973 - Beware - we should call just !is_proxybypass() here. But currently, our
+            // cURL wrapper class does not do it. So, to have consistent behaviour, we pass proxy
+            // setting regardless the $CFG->proxybypass setting. Once the {@link curl} class is
+            // fixed, the condition should be amended.
+            if (true or !is_proxybypass($info->download)) {
+                if (empty($CFG->proxyport)) {
+                    $params['proxy'] = $CFG->proxyhost;
+                } else {
+                    $params['proxy'] = $CFG->proxyhost.':'.$CFG->proxyport;
+                }
+
+                if (!empty($CFG->proxyuser) and !empty($CFG->proxypassword)) {
+                    $params['proxyuserpwd'] = $CFG->proxyuser.':'.$CFG->proxypassword;
+                }
+
+                if (!empty($CFG->proxytype)) {
+                    $params['proxytype'] = $CFG->proxytype;
+                }
+            }
+        }
 
         $widget = new single_button(
             new moodle_url('/mdeploy.php', $params),
@@ -1888,6 +1950,40 @@ class available_update_deployer {
         }
 
         return $this->directory_writable($directory);
+    }
+
+    /**
+     * Checks if the mdeploy.php will be able to fetch the ZIP from the given URL
+     *
+     * This is mainly supposed to check if the transmission over HTTPS would
+     * work. That is, if the CA certificates are present at the server.
+     *
+     * @param string $downloadurl the URL of the ZIP package to download
+     * @return bool
+     */
+    protected function update_downloadable($downloadurl) {
+        global $CFG;
+
+        $curloptions = array(
+            'CURLOPT_SSL_VERIFYHOST' => 2,      // this is the default in {@link curl} class but just in case
+            'CURLOPT_SSL_VERIFYPEER' => true,
+        );
+
+        $cacertfile = $CFG->dataroot.'/moodleorgca.crt';
+        if (is_readable($cacertfile)) {
+            // Do not use CA certs provided by the operating system. Instead,
+            // use this CA cert to verify the updates provider.
+            $curloptions['CURLOPT_CAINFO'] = $cacertfile;
+        }
+
+        $curl = new curl(array('proxy' => true));
+        $result = $curl->head($downloadurl, $curloptions);
+        $errno = $curl->get_errno();
+        if (empty($errno)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

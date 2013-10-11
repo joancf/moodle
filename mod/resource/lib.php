@@ -225,7 +225,7 @@ function resource_user_complete($course, $user, $mod, $resource) {
  *
  * See {@link get_array_of_activities()} in course/lib.php
  *
- * @param cm_info $coursemodule
+ * @param stdClass $coursemodule
  * @return cached_cm_info info
  */
 function resource_get_coursemodule_info($coursemodule) {
@@ -249,7 +249,7 @@ function resource_get_coursemodule_info($coursemodule) {
     }
 
     if ($resource->tobemigrated) {
-        $info->icon ='i/cross_red_big';
+        $info->icon ='i/invalid';
         return $info;
     }
     $fs = get_file_storage();

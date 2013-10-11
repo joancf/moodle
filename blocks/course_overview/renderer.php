@@ -104,9 +104,15 @@ class block_course_overview_renderer extends plugin_renderer_base {
                 $html .= html_writer::end_tag('div');
             }
 
-            $attributes = array('title' => s($course->fullname));
+            // No need to pass title through s() here as it will be done automatically by html_writer.
+            $attributes = array('title' => $course->fullname);
             if ($course->id > 0) {
-                $link = html_writer::link(new moodle_url('/course/view.php', array('id' => $course->id)), format_string($course->shortname, true, $course->id), $attributes);
+                if (empty($course->visible)) {
+                    $attributes['class'] = 'dimmed';
+                }
+                $courseurl = new moodle_url('/course/view.php', array('id' => $course->id));
+                $coursefullname = format_string($course->fullname, true, $course->id);
+                $link = html_writer::link($courseurl, $coursefullname, $attributes);
                 $html .= $this->output->heading($link, 2, 'title');
             } else {
                 $html .= $this->output->heading(html_writer::link(
@@ -149,7 +155,7 @@ class block_course_overview_renderer extends plugin_renderer_base {
             $output .= html_writer::start_tag('div', array('class' => 'activity_overview'));
             $url = new moodle_url("/mod/$module/index.php", array('id' => $cid));
             $modulename = get_string('modulename', $module);
-            $icontext = html_writer::link($url, $this->output->pix_icon('icon', $modulename, 'mod_'.$module, array('class'=>'icon')).' ');
+            $icontext = html_writer::link($url, $this->output->pix_icon('icon', $modulename, 'mod_'.$module, array('class'=>'iconlarge')));
             if (get_string_manager()->string_exists("activityoverview", $module)) {
                 $icontext .= get_string("activityoverview", $module);
             } else {

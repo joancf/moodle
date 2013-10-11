@@ -85,19 +85,19 @@ define('URL_MATCH_EXACT', 2);
  * Returns $var with HTML characters (like "<", ">", etc.) properly quoted.
  * This function is very similar to {@link p()}
  *
- * @todo Remove obsolete param $obsolete if not used anywhere
- *
  * @param string $var the string potentially containing HTML characters
- * @param boolean $obsolete no longer used.
  * @return string
  */
-function s($var, $obsolete = false) {
+function s($var) {
 
-    if ($var === '0' or $var === false or $var === 0) {
+    if ($var === false) {
         return '0';
     }
 
-    return preg_replace("/&amp;#(\d+|x[0-7a-fA-F]+);/i", "&#$1;", htmlspecialchars($var, ENT_QUOTES, 'UTF-8', true));
+    // When we move to PHP 5.4 as a minimum version, change ENT_QUOTES on the
+    // next line to ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, and remove the
+    // 'UTF-8' argument. Both bring a speed-increase.
+    return preg_replace('/&amp;#(\d+|x[0-9a-f]+);/i', '&#$1;', htmlspecialchars($var, ENT_QUOTES, 'UTF-8'));
 }
 
 /**
@@ -747,12 +747,18 @@ class moodle_url {
         global $CFG;
 
         $url = $this->out($escaped, $overrideparams);
+        $httpswwwroot = str_replace("http://", "https://", $CFG->wwwroot);
 
-        if (strpos($url, $CFG->wwwroot) !== 0) {
+        // $url should be equal to wwwroot or httpswwwroot. If not then throw exception.
+        if (($url === $CFG->wwwroot) || (strpos($url, $CFG->wwwroot.'/') === 0)) {
+            $localurl = substr($url, strlen($CFG->wwwroot));
+            return !empty($localurl) ? $localurl : '';
+        } else if (($url === $httpswwwroot) || (strpos($url, $httpswwwroot.'/') === 0)) {
+            $localurl = substr($url, strlen($httpswwwroot));
+            return !empty($localurl) ? $localurl : '';
+        } else {
             throw new coding_exception('out_as_local_url called on a non-local URL');
         }
-
-        return str_replace($CFG->wwwroot, '', $url);
     }
 
     /**
@@ -1384,7 +1390,7 @@ function format_text_email($text, $format) {
         case FORMAT_WIKI:
             // there should not be any of these any more!
             $text = wikify_links($text);
-            return strtr(strip_tags($text), array_flip(get_html_translation_table(HTML_ENTITIES)));
+            return textlib::entities_to_utf8(strip_tags($text), true);
             break;
 
         case FORMAT_HTML:
@@ -1395,7 +1401,7 @@ function format_text_email($text, $format) {
         case FORMAT_MARKDOWN:
         default:
             $text = wikify_links($text);
-            return strtr(strip_tags($text), array_flip(get_html_translation_table(HTML_ENTITIES)));
+            return textlib::entities_to_utf8(strip_tags($text), true);
             break;
     }
 }
@@ -1578,8 +1584,21 @@ function is_purify_html_necessary($text) {
 function purify_html($text, $options = array()) {
     global $CFG;
 
-    $type = !empty($options['allowid']) ? 'allowid' : 'normal';
     static $purifiers = array();
+    static $caches = array();
+
+    $type = !empty($options['allowid']) ? 'allowid' : 'normal';
+
+    if (!array_key_exists($type, $caches)) {
+        $caches[$type] = cache::make('core', 'htmlpurifier', array('type' => $type));
+    }
+    $cache = $caches[$type];
+
+    $filteredtext = $cache->get($text);
+    if ($filteredtext !== false) {
+        return $filteredtext;
+    }
+
     if (empty($purifiers[$type])) {
 
         // make sure the serializer dir exists, it should be fine if it disappears later during cache reset
@@ -1627,15 +1646,17 @@ function purify_html($text, $options = array()) {
 
     $multilang = (strpos($text, 'class="multilang"') !== false);
 
+    $filteredtext = $text;
     if ($multilang) {
-        $text = preg_replace('/<span(\s+lang="([a-zA-Z0-9_-]+)"|\s+class="multilang"){2}\s*>/', '<span xxxlang="${2}">', $text);
+        $filteredtext = preg_replace('/<span(\s+lang="([a-zA-Z0-9_-]+)"|\s+class="multilang"){2}\s*>/', '<span xxxlang="${2}">', $filteredtext);
     }
-    $text = $purifier->purify($text);
+    $filteredtext = $purifier->purify($filteredtext);
     if ($multilang) {
-        $text = preg_replace('/<span xxxlang="([a-zA-Z0-9_-]+)">/', '<span lang="${1}" class="multilang">', $text);
+        $filteredtext = preg_replace('/<span xxxlang="([a-zA-Z0-9_-]+)">/', '<span lang="${1}" class="multilang">', $filteredtext);
     }
+    $cache->set($text, $filteredtext);
 
-    return $text;
+    return $filteredtext;
 }
 
 /**
@@ -3021,11 +3042,12 @@ class progress_bar {
         if (CLI_SCRIPT) {
             return; // temporary solution for cli scripts
         }
+        $widthplusborder = $this->width + 2;
         $htmlcode = <<<EOT
-        <div style="text-align:center;width:{$this->width}px;clear:both;padding:0;margin:0 auto;">
+        <div style="text-align:center;width:{$widthplusborder}px;clear:both;padding:0;margin:0 auto;">
             <h2 id="status_{$this->html_id}" style="text-align: center;margin:0 auto"></h2>
             <p id="time_{$this->html_id}"></p>
-            <div id="bar_{$this->html_id}" style="border-style:solid;border-width:1px;width:500px;height:50px;">
+            <div id="bar_{$this->html_id}" style="border-style:solid;border-width:1px;width:{$this->width}px;height:50px;">
                 <div id="progress_{$this->html_id}"
                 style="text-align:center;background:#FFCC66;width:4px;border:1px
                 solid gray;height:38px; padding-top:10px;">&nbsp;<span id="pt_{$this->html_id}"></span>

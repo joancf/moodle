@@ -111,7 +111,9 @@ class assign_grading_table extends table_sql implements renderable {
         $params['assignmentid1'] = (int)$this->assignment->get_instance()->id;
         $params['assignmentid2'] = (int)$this->assignment->get_instance()->id;
 
-        $fields = user_picture::fields('u') . ', ';
+        $extrauserfields = get_extra_user_fields($this->assignment->get_context());
+
+        $fields = user_picture::fields('u', $extrauserfields) . ', ';
         $fields .= 'u.id as userid, ';
         $fields .= 's.status as status, ';
         $fields .= 's.id as submissionid, ';
@@ -134,16 +136,24 @@ class assign_grading_table extends table_sql implements renderable {
         $where = 'u.id ' . $userwhere;
         $params = array_merge($params, $userparams);
 
-        if ($filter == ASSIGN_FILTER_SUBMITTED) {
-            $where .= ' AND s.timecreated > 0 ';
-        }
-        if ($filter == ASSIGN_FILTER_REQUIRE_GRADING) {
-            $where .= ' AND (s.timemodified > g.timemodified OR (s.timemodified IS NOT NULL AND g.timemodified IS NULL))';
-        }
-        if (strpos($filter, ASSIGN_FILTER_SINGLE_USER) === 0) {
-            $userfilter = (int) array_pop(explode('=', $filter));
-            $where .= ' AND (u.id = :userid)';
-            $params['userid'] = $userfilter;
+        // The filters do not make sense when there are no submissions, so do not apply them.
+        if ($this->assignment->is_any_submission_plugin_enabled()) {
+            if ($filter == ASSIGN_FILTER_SUBMITTED) {
+                $where .= ' AND (s.timemodified IS NOT NULL AND
+                                 s.status = :submitted) ';
+                $params['submitted'] = ASSIGN_SUBMISSION_STATUS_SUBMITTED;
+
+            } else if ($filter == ASSIGN_FILTER_REQUIRE_GRADING) {
+                $where .= ' AND (s.timemodified IS NOT NULL AND
+                                 s.status = :submitted AND
+                                 (s.timemodified > g.timemodified OR g.timemodified IS NULL))';
+                $params['submitted'] = ASSIGN_SUBMISSION_STATUS_SUBMITTED;
+
+            } else if (strpos($filter, ASSIGN_FILTER_SINGLE_USER) === 0) {
+                $userfilter = (int) array_pop(explode('=', $filter));
+                $where .= ' AND (u.id = :userid)';
+                $params['userid'] = $userfilter;
+            }
         }
         $this->set_sql($fields, $from, $where, $params);
 
@@ -175,6 +185,11 @@ class assign_grading_table extends table_sql implements renderable {
             // Fullname.
             $columns[] = 'fullname';
             $headers[] = get_string('fullname');
+
+            foreach ($extrauserfields as $extrafield) {
+                $columns[] = $extrafield;
+                $headers[] = get_user_field_name($extrafield);
+            }
         } else {
             // Record ID.
             $columns[] = 'recordid';
@@ -284,6 +299,9 @@ class assign_grading_table extends table_sql implements renderable {
         // set the columns
         $this->define_columns($columns);
         $this->define_headers($headers);
+        foreach ($extrauserfields as $extrafield) {
+             $this->column_class($extrafield, $extrafield);
+        }
         // We require at least one unique column for the sort.
         $this->sortable(true, 'userid');
         $this->no_sorting('recordid');
@@ -396,7 +414,7 @@ class assign_grading_table extends table_sql implements renderable {
                 if ($grade == -1 || $grade === null) {
                     return '';
                 }
-                return format_float($grade);
+                return format_float($grade, 2);
             } else {
                 // This is a custom scale.
                 $scale = $this->assignment->display_grade($grade, false);
@@ -585,7 +603,11 @@ class assign_grading_table extends table_sql implements renderable {
         $gradingdisabled = $this->assignment->grading_disabled($row->id);
 
         if (!$this->is_downloading()) {
-            $icon = $this->output->pix_icon('gradefeedback', get_string('grade'), 'mod_assign');
+            $name = fullname($row);
+            if ($this->assignment->is_blind_marking()) {
+                $name = get_string('hiddenuser', 'assign') . $this->assignment->get_uniqueid_for_user($row->userid);
+            }
+            $icon = $this->output->pix_icon('gradefeedback', get_string('gradeuser', 'assign', $name), 'mod_assign');
             $url = new moodle_url('/mod/assign/view.php',
                                             array('id' => $this->assignment->get_course_module()->id,
                                                   'rownum'=>$this->rownum,'action'=>'grade'));
@@ -624,6 +646,10 @@ class assign_grading_table extends table_sql implements renderable {
         $o = '-';
 
         if ($row->timemarked && $row->grade !== NULL && $row->grade >= 0) {
+            $o = userdate($row->timemarked);
+        }
+        if ($row->timemarked && $this->is_downloading()) {
+            // Force it for downloads as it affects import.
             $o = userdate($row->timemarked);
         }
 
@@ -768,7 +794,7 @@ class assign_grading_table extends table_sql implements renderable {
         $edit .= html_writer::start_tag('ul');
         $edit .= html_writer::start_tag('li', array('class'=>'menuicon'));
 
-        $menuicon = $this->output->pix_icon('i/menu', get_string('actions'));
+        $menuicon = $this->output->pix_icon('t/contextmenu', get_string('actions'));
         $edit .= $this->output->action_link('#menu' . $row->id, $menuicon, null, array('class'=>'yui3-menu-label'));
         $edit .= $this->output->container_start(array('yui3-menu', 'yui3-loading'), 'menu' . $row->id);
         $edit .= $this->output->container_start(array('yui3-menu-content'));
@@ -834,7 +860,13 @@ class assign_grading_table extends table_sql implements renderable {
      * @param stdClass $row The submission row
      * @return mixed string or NULL
      */
-    function other_cols($colname, $row){
+    public function other_cols($colname, $row) {
+        // For extra user fields the result is already in $row.
+        if (empty($this->plugincache[$colname])) {
+            return $row->$colname;
+        }
+
+        // This must be a plugin field.
         $plugincache = $this->plugincache[$colname];
 
         $plugin = $plugincache[0];

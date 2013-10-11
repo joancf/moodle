@@ -39,6 +39,15 @@ define('FEEDBACK_MAX_PIX_LENGTH', '400'); //max. Breite des grafischen Balkens i
 define('FEEDBACK_DEFAULT_PAGE_COUNT', 20);
 
 /**
+ * Returns all other caps used in module.
+ *
+ * @return array
+ */
+function feedback_get_extra_capabilities() {
+    return array('moodle/site:accessallgroups');
+}
+
+/**
  * @uses FEATURE_GROUPS
  * @uses FEATURE_GROUPINGS
  * @uses FEATURE_GROUPMEMBERSONLY
@@ -416,7 +425,12 @@ function feedback_get_recent_mod_activity(&$activities, &$index,
         return;
     }
 
-    $cm_context      = context_module::instance($cm->id);
+    $cm_context = context_module::instance($cm->id);
+
+    if (!has_capability('mod/feedback:view', $cm_context)) {
+        return;
+    }
+
     $accessallgroups = has_capability('moodle/site:accessallgroups', $cm_context);
     $viewfullnames   = has_capability('moodle/site:viewfullnames', $cm_context);
     $groupmode       = groups_get_activity_groupmode($cm, $course);
@@ -453,13 +467,24 @@ function feedback_get_recent_mod_activity(&$activities, &$index,
         $tmpactivity->sectionnum= $cm->sectionnum;
         $tmpactivity->timestamp = $feedbackitem->timemodified;
 
+        $tmpactivity->content = new stdClass();
         $tmpactivity->content->feedbackid = $feedbackitem->id;
         $tmpactivity->content->feedbackuserid = $feedbackitem->userid;
 
-        //TODO: add all necessary user fields, this is not enough for user_picture
-        $tmpactivity->user->userid   = $feedbackitem->userid;
+        $userfields = explode(',', user_picture::fields());
+        $tmpactivity->user = new stdClass();
+        foreach ($userfields as $userfield) {
+            if ($userfield == 'id') {
+                $tmpactivity->user->{$userfield} = $feedbackitem->userid; // aliased in SQL above
+            } else {
+                if (!empty($feedbackitem->{$userfield})) {
+                    $tmpactivity->user->{$userfield} = $feedbackitem->{$userfield};
+                } else {
+                    $tmpactivity->user->{$userfield} = null;
+                }
+            }
+        }
         $tmpactivity->user->fullname = fullname($feedbackitem, $viewfullnames);
-        $tmpactivity->user->picture  = $feedbackitem->picture;
 
         $activities[$index++] = $tmpactivity;
     }
@@ -500,7 +525,7 @@ function feedback_print_recent_mod_activity($activity, $courseid, $detail, $modn
     echo '</div>';
 
     echo '<div class="user">';
-    echo "<a href=\"$CFG->wwwroot/user/view.php?id={$activity->user->userid}&amp;course=$courseid\">"
+    echo "<a href=\"$CFG->wwwroot/user/view.php?id={$activity->user->id}&amp;course=$courseid\">"
          ."{$activity->user->fullname}</a> - ".userdate($activity->timestamp);
     echo '</div>';
 

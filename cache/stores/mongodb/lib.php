@@ -37,7 +37,7 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright  2012 Sam Hemelryk
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class cachestore_mongodb implements cache_store {
+class cachestore_mongodb extends cache_store implements cache_is_configurable {
 
     /**
      * The name of the store
@@ -67,7 +67,7 @@ class cachestore_mongodb implements cache_store {
      * The Connection object
      * @var Mongo
      */
-    protected $connection;
+    protected $connection = false;
 
     /**
      * The Database Object
@@ -100,7 +100,17 @@ class cachestore_mongodb implements cache_store {
     protected $definitionhash = null;
 
     /**
-     * Constructs a new instance of the Mongo store but does not connect to it.
+     * Set to true once this store is ready to be initialised and used.
+     * @var bool
+     */
+    protected $isready = false;
+
+    /**
+     * Constructs a new instance of the Mongo store.
+     *
+     * Noting that this function is not an initialisation. It is used to prepare the store for use.
+     * The store will be initialised when required and will be provided with a cache_definition at that time.
+     *
      * @param string $name
      * @param array $configuration
      */
@@ -130,7 +140,12 @@ class cachestore_mongodb implements cache_store {
             $this->extendedmode = $configuration['extendedmode'];
         }
 
-        $this->isready = self::are_requirements_met();
+        try {
+            $this->connection = new Mongo($this->server, $this->options);
+            $this->isready = true;
+        } catch (MongoConnectionException $e) {
+            // We only want to catch MongoConnectionExceptions here.
+        }
     }
 
     /**
@@ -139,14 +154,6 @@ class cachestore_mongodb implements cache_store {
      */
     public static function are_requirements_met() {
         return class_exists('Mongo');
-    }
-
-    /**
-     * Returns true if the user can add an instance of this store.
-     * @return bool
-     */
-    public static function can_add_instance() {
-        return true;
     }
 
     /**
@@ -174,7 +181,7 @@ class cachestore_mongodb implements cache_store {
     /**
      * Initialises the store instance for use.
      *
-     * This function is reponsible for making the connection.
+     * Once this has been done the cache is all set to be used.
      *
      * @param cache_definition $definition
      * @throws coding_exception
@@ -183,9 +190,8 @@ class cachestore_mongodb implements cache_store {
         if ($this->is_initialised()) {
             throw new coding_exception('This mongodb instance has already been initialised.');
         }
-        $this->definitionhash = $definition->generate_definition_hash();
-        $this->connection = new Mongo($this->server, $this->options);
         $this->database = $this->connection->selectDB($this->databasename);
+        $this->definitionhash = $definition->generate_definition_hash();
         $this->collection = $this->database->selectCollection($this->definitionhash);
         $this->collection->ensureIndex(array('key' => 1), array(
             'safe' => $this->usesafe,
@@ -219,27 +225,11 @@ class cachestore_mongodb implements cache_store {
     }
 
     /**
-     * Returns true if this store guarantees its data is there once set.
-     * @return bool
-     */
-    public function supports_data_guarantee() {
-        return true;
-    }
-
-    /**
      * Returns true if this store is making use of multiple identifiers.
      * @return bool
      */
     public function supports_multiple_identifiers() {
         return $this->extendedmode;
-    }
-
-    /**
-     * Returns true if this store supports native TTL.
-     * @return bool
-     */
-    public function supports_native_ttl() {
-        return false;
     }
 
     /**
@@ -390,8 +380,12 @@ class cachestore_mongodb implements cache_store {
      * @return boolean True on success. False otherwise.
      */
     public function purge() {
-        $this->collection->drop();
-        $this->collection = $this->database->selectCollection($this->definitionhash);
+        if ($this->isready) {
+            $this->collection->drop();
+            $this->collection = $this->database->selectCollection($this->definitionhash);
+        }
+
+        return true;
     }
 
     /**
@@ -463,8 +457,28 @@ class cachestore_mongodb implements cache_store {
     /**
      * Performs any necessary clean up when the store instance is being deleted.
      */
-    public function cleanup() {
-        $this->purge();
+    public function instance_deleted() {
+        // We can't use purge here that acts upon a collection.
+        // Instead we must drop the named database.
+        if ($this->connection) {
+            $connection = $this->connection;
+        } else {
+            try {
+               $connection = new Mongo($this->server, $this->options);
+            } catch (MongoConnectionException $e) {
+                // We only want to catch MongoConnectionExceptions here.
+                // If the server cannot be connected to we cannot clean it.
+                return;
+            }
+        }
+        $database = $connection->selectDB($this->databasename);
+        $database->drop();
+        $connection = null;
+        $database = null;
+        // Explicitly unset things to cause a close.
+        $this->collection = null;
+        $this->database = null;
+        $this->connection = null;
     }
 
     /**

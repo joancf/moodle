@@ -61,7 +61,7 @@ $(document).ready(function() {
         });
 
         //calendar and other links that need to be external
-        $('.maincalendar .filters a, li.activity.scorm a, div.files a, #page-user-filesPAGE li div a, .maincalendar .bottom a, .section li.url.modtype_url a, .resourcecontent .resourcemediaplugin a, #underfooter .noajax a, .block_mnet_hosts .content a, .block_private_files .content a, a.portfolio-add-link, #attempts td a').attr("data-ajax", "false");
+        $('.maincalendar .filters a, li.activity.scorm a, div.files a, #page-user-filesPAGE li div a, .maincalendar .bottom a, .section li.url.modtype_url a, .resourcecontent .resourcemediaplugin a, #underfooter .noajax a, .block_mnet_hosts .content a, .block_private_files .content a, a.portfolio-add-link, #attempts td a, .settingsul li a, .foldertree li a').attr("data-ajax", "false");
 
         //add blank to open in window for some
         $('#page-mod-url-viewPAGE div.urlworkaround a, #page-mod-resource-viewPAGE div.resourceworkaround a, .mediaplugin a.mediafallbacklink, #page-mod-resource-viewPAGE .resourcemp3 a, .foldertree li a').attr("target", "_blank").attr("data-role", "button").attr("data-icon", "plus");
@@ -89,11 +89,10 @@ $(document).ready(function() {
 
 
     //course page only js
-    $('div.path-course-view, .path-course-view div.generalpage').live('pagebeforecreate', function(event, ui) {
+    $('div.path-site, div.path-course-view, .path-course-view div.generalpage').live('pagebeforecreate', function(event, ui) {
         //course listing
-        $('.section li img').addClass("ui-li-icon");
-        $('.course-content ul.section').attr("data-role", "listview").attr("data-inset", "true").attr("data-theme", mythemeb);
-        $('.sitetopic ul.section').attr("data-role", "listview").attr("data-inset", "true").attr("data-theme", mythemeb);
+        $('.section li img.activityicon').addClass("ui-li-icon");
+        $('.course-content ul.section, .sitetopic ul.section').attr("data-role", "listview").attr("data-inset", "true").attr("data-theme", mythemeb);
         $('.topics div.left.side').addClass("ui-bar-" + mytheme);
         $('.section.hidden div.headingwrap').attr("data-theme", mythemeb);
         //$('.topics #section-0 div.left.side').removeClass("ui-li ui-li-divider ui-btn ui-bar-a");
@@ -108,6 +107,12 @@ $(document).ready(function() {
             this.form.submit();
             return false;
         });
+
+        // Force the class ui-li-desc on non-detected elements.
+        $('ul.section div.availabilityinfo, ul.section div.contentafterlink').addClass('ui-li-desc');
+
+        // Force some classes on dimmed elements.
+        $('ul.section div.dimmed_text > span').addClass('instancename');
     });
 
     //forum listing only stuff
@@ -127,14 +132,6 @@ $(document).ready(function() {
 
     //forum discussion page only stuff
     $('div#page-mod-forum-discussPAGE, #page-mod-forum-discuss div.generalpage, div.forumtype-single, .forumtype-single div.generalpage, div#page-mod-forum-postPAGE').live('pagebeforecreate',function(event, ui){
-        //remove parent post because of hash remove this if has listening is fixed
-        $('.options div.commands a').each(function(index) {
-            var url = $(this).attr("href");
-            if (url.indexOf("#") != -1) {
-                $(this).remove();
-            }
-        });
-
         //actual forum posting
         $('.forumpost div.row.header').addClass("ui-li ui-li-divider ui-btn ui-bar-" + mytheme);
         $('.options div.commands').attr("data-role", "controlgroup").attr("data-type", "horizontal");
@@ -244,19 +241,6 @@ $(document).ready(function() {
     //hotpot page only stuff
     $('div.path-mod-hotpot').live('pagebeforecreate',function(event, ui){
         $('.path-mod-hotpot button').attr("data-role", "none");
-    });
-
-    //collapsed topic only stuff
-    $('div#page-course-view-topcollPAGE').live('pagebeforecreate',function(event, ui){
-        $('#page-course-view-topcollPAGE ul.section').attr("data-role", "none");
-        $('.section li img').removeClass("ui-li-icon");
-        $.getScript('../course/format/topcoll/module.js');
-        $('#page-course-view-topcollPAGE tr.cps a').attr("data-role", "button").attr("data-icon", "arrow-r");
-        $('#page-course-view-topcollPAGE #thetopics').attr("data-role", "controlgroup");
-        $('#page-course-view-topcollPAGE td.cps_centre').each(function(index) {
-            var cpsc = $(this).text().replace('<br>','').replace(')','');
-            $(this).prev('td').find('a').append('<span class="ui-li-count ui-btn-up-a ui-btn-corner-all">' + cpsc + '</span>');
-        });
     });
 
     ///// functions below does stuff after creating page for some cleaning...

@@ -184,9 +184,10 @@ class enrol_ldap_plugin extends enrol_plugin {
                     if ($this->get_config('autocreate')) { // Autocreate
                         error_log($this->errorlogtag.get_string('createcourseextid', 'enrol_ldap',
                                                                 array('courseextid'=>$course_ext_id)));
-                        if ($newcourseid = $this->create_course($enrol)) {
-                            $course = $DB->get_record('course', array('id'=>$newcourseid));
+                        if (!$newcourseid = $this->create_course($enrol)) {
+                            continue;
                         }
+                        $course = $DB->get_record('course', array('id'=>$newcourseid));
                     } else {
                         error_log($this->errorlogtag.get_string('createnotcourseextid', 'enrol_ldap',
                                                                 array('courseextid'=>$course_ext_id)));
@@ -400,9 +401,10 @@ class enrol_ldap_plugin extends enrol_plugin {
                             if ($this->get_config('autocreate')) { // Autocreate
                                 error_log($this->errorlogtag.get_string('createcourseextid', 'enrol_ldap',
                                                                         array('courseextid'=>$idnumber)));
-                                if ($newcourseid = $this->create_course($course)) {
-                                    $course_obj = $DB->get_record('course', array('id'=>$newcourseid));
+                                if (!$newcourseid = $this->create_course($course)) {
+                                    continue;
                                 }
+                                $course_obj = $DB->get_record('course', array('id'=>$newcourseid));
                             } else {
                                 error_log($this->errorlogtag.get_string('createnotcourseextid', 'enrol_ldap',
                                                                         array('courseextid'=>$idnumber)));
@@ -653,7 +655,7 @@ class enrol_ldap_plugin extends enrol_plugin {
      * @param object role is a record from the mdl_role table.
      * @return array
      */
-    protected function find_ext_enrolments ($ldapconnection, $memberuid, $role) {
+    protected function find_ext_enrolments (&$ldapconnection, $memberuid, $role) {
         global $CFG;
         require_once($CFG->libdir.'/ldaplib.php');
 
@@ -718,13 +720,13 @@ class enrol_ldap_plugin extends enrol_plugin {
         // Get all contexts and look for first matching user
         $ldap_contexts = explode(';', $ldap_contexts);
         $ldap_pagedresults = ldap_paged_results_supported($this->get_config('ldap_version'));
-        $ldap_cookie = '';
         foreach ($ldap_contexts as $context) {
             $context = trim($context);
             if (empty($context)) {
                 continue;
             }
 
+            $ldap_cookie = '';
             $flat_records = array();
             do {
                 if ($ldap_pagedresults) {
@@ -948,7 +950,7 @@ class enrol_ldap_plugin extends enrol_plugin {
             $template->groupmodeforce = $courseconfig->groupmodeforce;
             $template->visible        = $courseconfig->visible;
             $template->lang           = $courseconfig->lang;
-            $template->groupmodeforce = $courseconfig->groupmodeforce;
+            $template->enablecompletion = $courseconfig->enablecompletion;
         }
         $course = $template;
 
@@ -975,6 +977,12 @@ class enrol_ldap_plugin extends enrol_plugin {
             $course->summary = '';
         } else {
             $course->summary = $course_ext[$this->get_config('course_summary')][0];
+        }
+
+        // Check if the shortname already exists if it does - skip course creation.
+        if ($DB->record_exists('course', array('shortname' => $course->shortname))) {
+            error_log($this->errorlogtag . get_string('duplicateshortname', 'enrol_ldap', $course));
+            return false;
         }
 
         $newcourse = create_course($course);

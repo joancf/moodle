@@ -101,7 +101,13 @@ class cachestore_addinstance_form extends moodleform {
         }
 
         if (method_exists($this, 'configuration_validation')) {
-            $errors = $this->configuration_validation($data, $files);
+            $newerrors = $this->configuration_validation($data, $files, $errors);
+            // We need to selectiviliy merge here
+            foreach ($newerrors as $element => $error) {
+                if (!array_key_exists($element, $errors)) {
+                    $errors[$element] = $error;
+                }
+            }
         }
 
         return $errors;
@@ -191,7 +197,7 @@ class cache_mode_mappings_form extends moodleform {
         );
         foreach ($stores as $storename => $store) {
             foreach ($store['modes'] as $mode => $enabled) {
-                if ($enabled) {
+                if ($enabled && ($mode !== cache_store::MODE_SESSION || $store['supports']['searchable'])) {
                     if (empty($store['default'])) {
                         $options[$mode][$storename] = $store['name'];
                     } else {

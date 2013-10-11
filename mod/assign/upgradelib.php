@@ -143,6 +143,8 @@ class assign_upgrade_manager {
                     if (!$plugin->upgrade_settings($oldcontext, $oldassignment, $log)) {
                         $rollback = true;
                     }
+                } else {
+                    $plugin->disable();
                 }
             }
             foreach ($newassignment->get_feedback_plugins() as $plugin) {
@@ -151,6 +153,8 @@ class assign_upgrade_manager {
                     if (!$plugin->upgrade_settings($oldcontext, $oldassignment, $log)) {
                         $rollback = true;
                     }
+                } else {
+                    $plugin->disable();
                 }
             }
 
@@ -160,6 +164,24 @@ class assign_upgrade_manager {
                 $DB->update_record('grading_areas', array('id'=>$gradingarea->id, 'contextid'=>$newassignment->get_context()->id, 'component'=>'mod_assign', 'areaname'=>'submissions'));
                 $gradingdefinitions = $DB->get_records('grading_definitions', array('areaid'=>$gradingarea->id));
             }
+
+            // Upgrade availability data.
+            $DB->set_field('course_modules_avail_fields',
+                           'coursemoduleid',
+                           $newcoursemodule->id,
+                           array('coursemoduleid'=>$oldcoursemodule->id));
+            $DB->set_field('course_modules_availability',
+                           'coursemoduleid',
+                           $newcoursemodule->id,
+                           array('coursemoduleid'=>$oldcoursemodule->id));
+            $DB->set_field('course_modules_availability',
+                           'sourcecmid',
+                           $newcoursemodule->id,
+                           array('sourcecmid'=>$oldcoursemodule->id));
+            $DB->set_field('course_sections_availability',
+                           'sourcecmid',
+                           $newcoursemodule->id,
+                           array('sourcecmid'=>$oldcoursemodule->id));
 
             // upgrade completion data
             $DB->set_field('course_modules_completion', 'coursemoduleid', $newcoursemodule->id, array('coursemoduleid'=>$oldcoursemodule->id));
@@ -238,31 +260,26 @@ class assign_upgrade_manager {
 
             $newassignment->update_calendar($newcoursemodule->id);
 
-            // copy the grades from the old assignment to the new one
+            // Reassociate grade_items from the old assignment instance to the new assign instance.
+            // This includes outcome linked grade_items.
+            $params = array('assign', $newassignment->get_instance()->id, 'assignment', $oldassignment->id);
+            $sql = 'UPDATE {grade_items} SET itemmodule = ?, iteminstance = ? WHERE itemmodule = ? AND iteminstance = ?';
+            $DB->execute($sql, $params);
 
-            $gradeitem = $DB->get_record('grade_items', array('iteminstance'=>$oldassignment->id, 'itemmodule'=>'assignment'), 'id', IGNORE_MISSING);
-            if ($gradeitem) {
-                $gradeitem->iteminstance = $newassignment->get_instance()->id;
-                $gradeitem->itemmodule = 'assign';
-                $DB->update_record('grade_items', $gradeitem);
-            }
             $gradesdone = true;
 
         } catch (Exception $exception) {
             $rollback = true;
-            $log .= get_string('conversionexception', 'mod_assign', $exception->error);
+            $log .= get_string('conversionexception', 'mod_assign', $exception->getMessage());
         }
 
         if ($rollback) {
             // roll back the grades changes
             if ($gradesdone) {
-                // copy the grades from the old assignment to the new one
-                $gradeitem = $DB->get_record('grade_items', array('iteminstance'=>$newassignment->get_instance()->id, 'itemmodule'=>'assign'), 'id', IGNORE_MISSING);
-                if ($gradeitem) {
-                    $gradeitem->iteminstance = $oldassignment->id;
-                    $gradeitem->itemmodule = 'assignment';
-                    $DB->update_record('grade_items', $gradeitem);
-                }
+                // Reassociate grade_items from the new assign instance to the old assignment instance.
+                $params = array('assignment', $oldassignment->id, 'assign', $newassignment->get_instance()->id);
+                $sql = 'UPDATE {grade_items} SET itemmodule = ?, iteminstance = ? WHERE itemmodule = ? AND iteminstance = ?';
+                $DB->execute($sql, $params);
             }
             // roll back the completion changes
             if ($completiondone) {
@@ -346,7 +363,7 @@ class assign_upgrade_manager {
             return false;
         }
 
-        $newcm->section = course_add_cm_to_section($newcm->course, $newcm->id, $section->section);
+        $newcm->section = course_add_cm_to_section($newcm->course, $newcm->id, $section->section, $cm->id);
 
         // make sure visibility is set correctly (in particular in calendar)
         // note: allow them to set it even without moodle/course:activityvisibility

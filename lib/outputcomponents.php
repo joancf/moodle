@@ -1108,9 +1108,6 @@ class html_writer {
      * @return string HTML fragment
      */
     public static function attribute($name, $value) {
-        if (is_array($value)) {
-            debugging("Passed an array for the HTML attribute $name", DEBUG_DEVELOPER);
-        }
         if ($value instanceof moodle_url) {
             return ' ' . $name . '="' . $value->out() . '"';
         }
@@ -2272,15 +2269,14 @@ class paging_bar implements renderable {
                 $lastpage = 1;
             }
 
-            if ($this->page > 15) {
-                $startpage = $this->page - 10;
+            if ($this->page > round(($this->maxdisplay/3)*2)) {
+                $currpage = $this->page - round($this->maxdisplay/3);
 
                 $this->firstlink = html_writer::link(new moodle_url($this->baseurl, array($this->pagevar=>0)), '1', array('class'=>'first'));
             } else {
-                $startpage = 0;
+                $currpage = 0;
             }
 
-            $currpage = $startpage;
             $displaycount = $displaypage = 0;
 
             while ($displaycount < $this->maxdisplay and $currpage < $lastpage) {

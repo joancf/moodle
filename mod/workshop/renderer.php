@@ -132,9 +132,9 @@ class mod_workshop_renderer extends plugin_renderer_base {
 
         $o .= $this->output->container_end(); // end of header
 
-        $content = format_text($submission->content, $submission->contentformat, array('overflowdiv'=>true));
-        $content = file_rewrite_pluginfile_urls($content, 'pluginfile.php', $this->page->context->id,
+        $content = file_rewrite_pluginfile_urls($submission->content, 'pluginfile.php', $this->page->context->id,
                                                         'mod_workshop', 'submission_content', $submission->id);
+        $content = format_text($content, $submission->contentformat, array('overflowdiv'=>true));
         if (!empty($content)) {
             if (!empty($CFG->enableplagiarism)) {
                 require_once($CFG->libdir.'/plagiarismlib.php');
@@ -232,9 +232,9 @@ class mod_workshop_renderer extends plugin_renderer_base {
         $o .= $this->output->heading(format_string($example->title), 3, 'title');
         $o .= $this->output->container_end(); // end of header
 
-        $content = format_text($example->content, $example->contentformat, array('overflowdiv'=>true));
-        $content = file_rewrite_pluginfile_urls($content, 'pluginfile.php', $this->page->context->id,
+        $content = file_rewrite_pluginfile_urls($example->content, 'pluginfile.php', $this->page->context->id,
                                                         'mod_workshop', 'submission_content', $example->id);
+        $content = format_text($content, $example->contentformat, array('overflowdiv'=>true));
         $o .= $this->output->container($content, 'content');
 
         $o .= $this->helper_submission_attachments($example->id, 'html');
@@ -898,12 +898,14 @@ class mod_workshop_renderer extends plugin_renderer_base {
             if ($sortby !== $sortid or $sorthow !== 'ASC') {
                 $url = new moodle_url($PAGE->url);
                 $url->params(array('sortby' => $sortid, 'sorthow' => 'ASC'));
-                $out .= $this->output->action_icon($url, new pix_icon('t/up', get_string('sortasc', 'workshop')), null, array('class' => 'sort asc'));
+                $out .= $this->output->action_icon($url, new pix_icon('t/sort_asc', get_string('sortasc', 'workshop')),
+                    null, array('class' => 'iconsort sort asc'));
             }
             if ($sortby !== $sortid or $sorthow !== 'DESC') {
                 $url = new moodle_url($PAGE->url);
                 $url->params(array('sortby' => $sortid, 'sorthow' => 'DESC'));
-                $out .= $this->output->action_icon($url, new pix_icon('t/down', get_string('sortdesc', 'workshop')), null, array('class' => 'sort desc'));
+                $out .= $this->output->action_icon($url, new pix_icon('t/sort_desc', get_string('sortdesc', 'workshop')),
+                    null, array('class' => 'iconsort sort desc'));
             }
         }
         return $out;

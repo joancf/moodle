@@ -265,17 +265,22 @@ class mod_quiz_renderer extends plugin_renderer_base {
      */
     public function countdown_timer(quiz_attempt $attemptobj, $timenow) {
 
-        $timeleft = $attemptobj->get_time_left($timenow);
+        $timeleft = $attemptobj->get_time_left_display($timenow);
         if ($timeleft !== false) {
-            // Make sure the timer starts just above zero. If $timeleft was <= 0, then
-            // this will just have the effect of causing the quiz to be submitted immediately.
-            $timerstartvalue = max($timeleft, 1);
-            $this->initialise_timer($timerstartvalue);
+            $ispreview = $attemptobj->is_preview();
+            $timerstartvalue = $timeleft;
+            if (!$ispreview) {
+                // Make sure the timer starts just above zero. If $timeleft was <= 0, then
+                // this will just have the effect of causing the quiz to be submitted immediately.
+                $timerstartvalue = max($timerstartvalue, 1);
+            }
+            $this->initialise_timer($timerstartvalue, $ispreview);
         }
 
         return html_writer::tag('div', get_string('timeleft', 'quiz') . ' ' .
                 html_writer::tag('span', '', array('id' => 'quiz-time-left')),
-                array('id' => 'quiz-timer'));
+                array('id' => 'quiz-timer', 'role' => 'timer',
+                    'aria-atomic' => 'true', 'aria-relevant' => 'text'));
     }
 
     /**
@@ -297,7 +302,11 @@ class mod_quiz_renderer extends plugin_renderer_base {
         $output = '';
         $userpicture = $panel->user_picture();
         if ($userpicture) {
-            $output .= html_writer::tag('div', $this->render($userpicture),
+            $fullname = fullname($userpicture->user);
+            if ($userpicture->size === true) {
+                $fullname = html_writer::tag('div', $fullname);
+            }
+            $output .= html_writer::tag('div', $this->render($userpicture) . $fullname,
                     array('id' => 'user-picture', 'class' => 'clearfix'));
         }
         $output .= $panel->render_before_button_bits($this);
@@ -486,9 +495,9 @@ class mod_quiz_renderer extends plugin_renderer_base {
      * Output the JavaScript required to initialise the countdown timer.
      * @param int $timerstartvalue time remaining, in seconds.
      */
-    public function initialise_timer($timerstartvalue) {
-        $this->page->requires->js_init_call('M.mod_quiz.timer.init',
-                array($timerstartvalue), false, quiz_get_js_module());
+    public function initialise_timer($timerstartvalue, $ispreview) {
+        $options = array($timerstartvalue, (bool)$ispreview);
+        $this->page->requires->js_init_call('M.mod_quiz.timer.init', $options, false, quiz_get_js_module());
     }
 
     /**
@@ -585,7 +594,7 @@ class mod_quiz_renderer extends plugin_renderer_base {
             $flag = '';
             if ($attemptobj->is_question_flagged($slot)) {
                 $flag = html_writer::empty_tag('img', array('src' => $this->pix_url('i/flagged'),
-                        'alt' => get_string('flagged', 'question'), 'class' => 'questionflag'));
+                        'alt' => get_string('flagged', 'question'), 'class' => 'questionflag icon-post'));
             }
             if ($attemptobj->can_navigate_to($slot)) {
                 $row = array(html_writer::link($attemptobj->attempt_url($slot),
@@ -681,7 +690,6 @@ class mod_quiz_renderer extends plugin_renderer_base {
         $output = '';
         $output .= $this->view_information($quiz, $cm, $context, $viewobj->infomessages);
         $output .= $this->view_table($quiz, $context, $viewobj);
-        $output .= $this->view_best_score($viewobj);
         $output .= $this->view_result_info($quiz, $context, $cm, $viewobj);
         $output .= $this->box($this->view_page_buttons($viewobj), 'quizattempt');
         return $output;
@@ -830,14 +838,15 @@ class mod_quiz_renderer extends plugin_renderer_base {
         global $CFG;
 
         $output = '';
+
         // Print quiz name and description.
         $output .= $this->heading(format_string($quiz->name));
-        if (trim(strip_tags($quiz->intro))) {
-            $output .= $this->box(format_module_intro('quiz', $quiz, $cm->id), 'generalbox',
-                    'intro');
-        }
+        $output .= $this->quiz_intro($quiz, $cm);
 
-        $output .= $this->box($this->access_messages($messages), 'quizinfo');
+        // Output any access messages.
+        if ($messages) {
+            $output .= $this->box($this->access_messages($messages), 'quizinfo');
+        }
 
         // Show number of attempts summary to those who can view reports.
         if (has_capability('mod/quiz:viewreports', $context)) {
@@ -857,13 +866,11 @@ class mod_quiz_renderer extends plugin_renderer_base {
      * @return string HTML to output.
      */
     public function quiz_intro($quiz, $cm) {
-        if (trim(strip_tags($quiz->intro))) {
-            return $this->box(format_module_intro('quiz', $quiz, $cm->id),
-                    'generalbox', 'intro');
-
-        } else {
+        if (html_is_blank($quiz->intro)) {
             return '';
         }
+
+        return $this->box(format_module_intro('quiz', $quiz, $cm->id), 'generalbox', 'intro');
     }
 
     /**
@@ -1023,17 +1030,10 @@ class mod_quiz_renderer extends plugin_renderer_base {
     }
 
     /**
-     * Prints the students best score
-     *
-     * @param mod_quiz_view_object $viewobj
+     * @deprecated Do not use any more. Removed in Moodle 2.6.
      */
     public function view_best_score($viewobj) {
-        $output = '';
-        // Print information about the student's best score for this quiz if possible.
-        if (!$viewobj->moreattempts) {
-            $output .= $this->heading(get_string('nomoreattempts', 'quiz'));
-        }
-        return $output;
+        return '';
     }
 
     /**
@@ -1075,14 +1075,14 @@ class mod_quiz_renderer extends plugin_renderer_base {
         }
         if ($viewobj->gradebookfeedback) {
             $resultinfo .= $this->heading(get_string('comment', 'quiz'), 3, 'main');
-            $resultinfo .= '<p class="quizteacherfeedback">'.$viewobj->gradebookfeedback.
-                    "</p>\n";
+            $resultinfo .= html_writer::tag('div', $viewobj->gradebookfeedback,
+                    array('class' => 'quizteacherfeedback')) . "\n";
         }
         if ($viewobj->feedbackcolumn) {
             $resultinfo .= $this->heading(get_string('overallfeedback', 'quiz'), 3, 'main');
-            $resultinfo .= html_writer::tag('p',
+            $resultinfo .= html_writer::tag('div',
                     quiz_feedback_for_grade($viewobj->mygrade, $quiz, $context),
-                    array('class' => 'quizgradefeedback'))."\n";
+                    array('class', 'quizgradefeedback')) . "\n";
         }
 
         if ($resultinfo) {

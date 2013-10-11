@@ -175,7 +175,8 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
         }
         $o.= html_writer::end_tag('div');
 
-        $o .= $this->section_availability_message($section);
+        $o .= $this->section_availability_message($section,
+                has_capability('moodle/course:viewhiddensections', $context));
 
         return $o;
     }
@@ -245,7 +246,7 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
                 $strmoveup = get_string('moveup');
 
                 $controls[] = html_writer::link($url,
-                    html_writer::empty_tag('img', array('src' => $this->output->pix_url('t/up'),
+                    html_writer::empty_tag('img', array('src' => $this->output->pix_url('i/up'),
                     'class' => 'icon up', 'alt' => $strmoveup)),
                     array('title' => $strmoveup, 'class' => 'moveup'));
             }
@@ -257,7 +258,7 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
                 $strmovedown =  get_string('movedown');
 
                 $controls[] = html_writer::link($url,
-                    html_writer::empty_tag('img', array('src' => $this->output->pix_url('t/down'),
+                    html_writer::empty_tag('img', array('src' => $this->output->pix_url('i/down'),
                     'class' => 'icon down', 'alt' => $strmovedown)),
                     array('title' => $strmovedown, 'class' => 'movedown'));
             }
@@ -305,7 +306,9 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
         $o.= html_writer::end_tag('div');
         $o.= $this->section_activity_summary($section, $course, null);
 
-        $o.= $this->section_availability_message($section);
+        $context = context_course::instance($course->id);
+        $o .= $this->section_availability_message($section,
+                has_capability('moodle/course:viewhiddensections', $context));
 
         $o .= html_writer::end_tag('div');
         $o .= html_writer::end_tag('li');
@@ -321,7 +324,7 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
      * @param array    $mods (argument not used)
      * @return string HTML to output.
      */
-    private function section_activity_summary($section, $course, $mods) {
+    protected function section_activity_summary($section, $course, $mods) {
         $modinfo = get_fast_modinfo($course);
         if (empty($modinfo->sections[$section->section])) {
             return '';
@@ -389,22 +392,38 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
     }
 
     /**
-     * If section is not visible to current user, display the message about that
-     * ('Not available until...', that sort of thing). Otherwise, returns blank.
+     * If section is not visible, display the message about that ('Not available
+     * until...', that sort of thing). Otherwise, returns blank.
+     *
+     * For users with the ability to view hidden sections, it shows the
+     * information even though you can view the section and also may include
+     * slightly fuller information (so that teachers can tell when sections
+     * are going to be unavailable etc). This logic is the same as for
+     * activities.
      *
      * @param stdClass $section The course_section entry from DB
+     * @param bool $canviewhidden True if user can view hidden sections
      * @return string HTML to output
      */
-    protected function section_availability_message($section) {
+    protected function section_availability_message($section, $canviewhidden) {
+        global $CFG;
         $o = '';
-        if (!$section->uservisible || $section->availableinfo) {
+        if (!$section->uservisible) {
             $o .= html_writer::start_tag('div', array('class' => 'availabilityinfo'));
-            if (!empty($section->availableinfo)) {
-                $o .= $section->availableinfo;
-            } else {
-                $o .= get_string('notavailable');
-            }
+            // Note: We only get to this function if availableinfo is non-empty,
+            // so there is definitely something to print.
+            $o .= $section->availableinfo;
             $o .= html_writer::end_tag('div');
+        } else if ($canviewhidden && !empty($CFG->enableavailability) && $section->visible) {
+            $ci = new condition_info_section($section);
+            $fullinfo = $ci->get_full_information();
+            if ($fullinfo) {
+                $o .= html_writer::start_tag('div', array('class' => 'availabilityinfo'));
+                $o .= get_string(
+                        ($section->showavailability ? 'userrestriction_visible' : 'userrestriction_hidden'),
+                        'condition', $fullinfo);
+                $o .= html_writer::end_tag('div');
+            }
         }
         return $o;
     }
@@ -671,9 +690,10 @@ abstract class format_section_renderer_base extends plugin_renderer_base {
                 continue;
             }
             // Show the section if the user is permitted to access it, OR if it's not available
-            // but showavailability is turned on
+            // but showavailability is turned on (and there is some available info text).
             $showsection = $thissection->uservisible ||
-                    ($thissection->visible && !$thissection->available && $thissection->showavailability);
+                    ($thissection->visible && !$thissection->available && $thissection->showavailability
+                    && !empty($thissection->availableinfo));
             if (!$showsection) {
                 // Hidden section message is overridden by 'unavailable' control
                 // (showavailability option).

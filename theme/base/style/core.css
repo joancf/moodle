@@ -1,7 +1,8 @@
 /**
- * Required to undo YUI resets that override input size
+ * Required to undo YUI resets that override input size, margin, etc.
  */
 input[type=text],input[type=password],textarea{width:auto;}
+input[type=checkbox],input[type=radio]{margin-right: 7px;}
 
 /* Fix for YUI overriding styles */
 strong{font-style:inherit;}em{font-weight:inherit;}
@@ -59,6 +60,7 @@ a.dimmed_text:visited,
 
 .course-content .current {background:#E3E3E3;}
 
+.inline,
 .inline-list li {display: inline;}
 .notifytiny {font-size:0.7em;}
 .notifytiny li,
@@ -69,7 +71,7 @@ a.dimmed_text:visited,
 .notifysuccess {color:#006600;}
 .reportlink {text-align:right;}
 a.autolink.glossary:hover {cursor: help;}
-/* Block which is hidden if javascript enabled, prevents fickering visible when JS from footer used! */
+/* Block which is hidden if javascript enabled, prevents flickering, visible when JS from footer used! */
 .collapsibleregioncaption {white-space: nowrap;}
 .collapsibleregioncaption img {vertical-align: middle;}
 .jsenabled .hiddenifjs {display: none;}
@@ -89,13 +91,21 @@ a.autolink.glossary:hover {cursor: help;}
 img.resize {height: 1em;width: 1em;}
 .block img.resize,
 .breadcrumb img.resize {height: 0.9em;width: 0.8em;}
-img.icon {height:16px;vertical-align:text-bottom;width:16px;padding: 2px 6px 2px 0;}
-.dir-rtl img.icon {padding: 2px 0 2px 6px;}
+
+/* Icon styles */
+img.icon {height:16px;vertical-align:text-bottom;width:16px;padding-right: 6px;}
+.dir-rtl img.icon {padding-left: 6px; padding-right: 0; }
 img.iconsmall {height:12px;margin-right:3px;vertical-align:middle;width:12px;}
-img.iconhelp, .helplink img {height:16px; padding-left:3px;vertical-align:middle;width:16px;}
+img.iconhelp, .helplink img {height:16px; padding-left:3px;vertical-align:text-bottom;width:16px;}
+.dir-rtl img.iconhelp, .dir-rtl .helplink img {padding-right: 3px; padding-left: 0; }
 img.iconlarge {height: 24px; width: 24px; vertical-align:middle;}
+img.iconsort { vertical-align: text-bottom; padding-left: .3em; margin-bottom: .15em;}
+.dir-rtl img.iconsort { padding-right: .3em; padding-left: 0;}
 img.icontoggle {height:17px;vertical-align:middle;width:50px;}
 img.iconkbhelp {height:17px;width:49px;}
+img.icon-pre, .dir-rtl img.icon-post { padding-right: 3px; padding-left: 0; }
+img.icon-post, .dir-rtl img.icon-pre { padding-left: 3px; padding-right: 0; }
+
 .categorybox .category {font-size:1.2em;font-weight:bold;}
 .generalbox {border:1px solid;}
 .boxaligncenter {margin-left:auto;margin-right:auto;}
@@ -120,6 +130,14 @@ img.emoticon {vertical-align: middle;width: 15px;height: 15px;}
 form.popupform,
 form.popupform div {display: inline;}
 .arrow_button input {overflow:hidden;}
+.action-icon img.smallicon { vertical-align: text-bottom; margin-left: .45em;}
+.dir-rtl .action-icon img.smallicon { margin-right: .45em; margin-left: 0;}
+h1.main img,
+h2.main img,
+h3.main img,
+h4.main img,
+h5.main img,
+h6.main img {vertical-align: middle;}
 
 /** The 1-pixel padding is there to avoid phantom scroll bars on OS X (FF, Safari and Chrome)**/
 .no-overflow {overflow:auto;padding-bottom:1px;}
@@ -223,6 +241,7 @@ a.skip:active {position: static;display: block;}
 .dir-rtl .mform .fitem fieldset.felement {padding-right: 1%;margin-right: 15%;}
 .mform .error,
 .mform .required {color:#A00;}
+.mform span.error {display: inline-block;padding: 4px;margin-bottom: 4px;background-color: #F2DEDE;border: 1px solid #EED3D7;}
 .mform .required .fgroup span label {color:#000;}
 .mform .fdescription.required {color:#A00;text-align:right;}
 .mform .fpassword .unmask {display:inline;margin-left:0.5em;}
@@ -237,13 +256,16 @@ a.skip:active {position: static;display: block;}
 .mform fieldset.fdate_selector label {display:inline;float: none;width: auto;}
 .mform .ftags label.accesshide {display: block;position: static;}
 .mform .ftags select {margin-bottom: 0.7em;min-width: 22em;}
+.mform .helplink img { margin: 0 0 0 .45em; padding: 0;}
+.dir-rtl .mform .helplink img { margin: 0 .45em 0 0; padding: 0;}
+.mform legend .helplink img { margin-right: .2em; }
+.dir-rtl .mform legend .helplink img { margin: 0 .45em 0 .2em; }
+.urlselect label,
+.singleselect label { margin-right: .3em; }
+.dir-rtl .urlselect label,
+.dir-rtl .singleselect label { margin-left: .3em; margin-right: 0; }
 
 input#id_externalurl {direction:ltr;}
-
-/** Browser corrections for mforms **/
-.ie .mform .fitem .felement {margin-left:0;text-align:left;float:left;}
-/** Fix IE double margin + float bugs **/
-.ie .mform .fitem .fitemtitle {padding-right:1em;}
 #portfolio-add-button {display:inline;}
 
 /**
@@ -264,6 +286,7 @@ input#id_externalurl {direction:ltr;}
 .addbloglink {text-align: center;}
 .blog_entry .audience {text-align: right;padding-right: 4px;}
 .blog_entry .tags {margin-top: 15px;}
+.blog_entry .tags .action-icon img.smallicon { height: 16px; width: 16px; }
 .blog_entry .content {margin-left: 43px;}
 
 /**
@@ -278,6 +301,7 @@ input#id_externalurl {direction:ltr;}
 .groupmanagementtable #potentialcell {width: 42%;}
 .groupmanagementtable #buttonscell {width: 16%;}
 .groupmanagementtable #buttonscell input {width: 80%;}
+.groupmanagementtable #buttonscell p.arrow_button input {width: auto;min-width: 80%;margin: 0 auto;}
 .groupmanagementtable #removeselect_wrapper,
 .groupmanagementtable #addselect_wrapper {width: 100%;}
 .groupmanagementtable #removeselect_wrapper label,
@@ -310,6 +334,7 @@ input#id_externalurl {direction:ltr;}
 .loginbox .signupform {margin-top:1em;text-align:center;}
 .loginbox.twocolumns .loginpanel {float:left;width:49.5%;border-right: 1px solid;margin-bottom:-2000px;padding-bottom:2000px;}
 .loginbox.twocolumns .signuppanel {float:right;width:50%;margin-bottom:-2000px;padding-bottom:2000px;}
+.loginbox .potentialidp .smallicon { vertical-align: text-bottom; margin: 0 .3em; }
 
 /**
  * Notes
@@ -323,14 +348,8 @@ input#id_externalurl {direction:ltr;}
 /**
  * My Moodle
  */
-.path-my .coursebox .overview .name {margin-left:20px;}
-.dir-rtl .path-my .coursebox .overview .name {margin-right:20px;}
-.path-my .coursebox .overview .info {margin-left:25px;}
-.dir-rtl .path-my .coursebox .overview .info {margin-right:25px;}
-.path-my .coursebox .overview .details {margin-left:25px;}
-.dir-rtl .path-my .coursebox .overview .details {margin-right:25px;}
-.path-my .coursebox .overview {margin-bottom:10px;}
-.path-my .coursebox .info {float: none;}
+.path-my .coursebox .overview {margin: 15px 30px 10px 30px;}
+.path-my .coursebox .info {float: none; margin: 0;}
 
 /**
  * Logs
@@ -365,16 +384,19 @@ table.mod_index {width:100%;}
 .comment-area textarea {width:100%;overflow:auto;}
 .comment-area .fd {text-align:right;}
 .comment-meta span {color:gray;}
+.comment-link img { vertical-align: text-bottom; }
 .comment-list {font-size: 11px;overflow:auto;list-style:none;padding:0;margin:0;}
-.comment-list li {margin: 2px;list-style:none;margin-bottom:5px;clear:both;}
+.comment-list li {margin: 2px;list-style:none;margin-bottom:5px;clear:both;padding: .3em;position: relative;}
 .comment-list li.first {display:none}
 .comment-paging{text-align:center;}
 .comment-paging .pageno{padding:2px;}
 .comment-paging .curpage{border:1px solid #CCC;}
 .comment-message .picture {width: 20px;float:left;}
+.dir-rtl .comment-message .picture {float:right;}
 .comment-message .text {margin:0;padding:0;}
 .comment-message .text p {padding:0;margin:0 18px 0 0;}
-.comment-delete {float:right;text-align:right;}
+.comment-delete {position: absolute; top: 0; right: 0;margin: .3em;}
+.dir-rtl .comment-delete {position: absolute; left: 0; right: auto;margin: .3em;}
 .comment-delete-confirm {background: #eee; padding: 2px; width: 5em;text-align:center;}
 .comment-container {float:left;margin: 4px;}
 .comment-report-selectall{display:none}
@@ -482,6 +504,9 @@ body.tag .managelink {padding: 5px;}
 .path-backup .backup_progress span.backup_stage.backup_stage_complete {color:inherit;}
 #page-backup-restore .filealiasesfailures {background-color:#ffd3d9}
 #page-backup-restore .filealiasesfailures .aliaseslist {width:90%;margin:0.8em auto;background-color:white;border:1px dotted #666;}
+.path-backup .fitemtitle .iconlarge.icon-post { padding-left: 6px; }
+.path-backup.dir-rtl .fitemtitle .iconlarge.icon-post { padding-right: 6px; padding-right: 0; }
+.path-backup .fitem .smallicon { vertical-align: text-bottom; }
 
 /**
  * Web Service
@@ -646,11 +671,6 @@ body.tag .managelink {padding: 5px;}
 .corelightbox {background-color:#CCC;position:absolute;top:0;left:0;width:100%;height:100%;text-align:center;}
 .corelightbox img {position:fixed;top:50%; left: 50%;}
 
-/**
- * IE - Overide for RTL layout
- */
-.ie.dir-rtl .mform .fitem .felement {margin-right:0;text-align:right;float:right;}
-
 .mod-indent-1 {margin-left:30px;}
 .mod-indent-2 {margin-left:60px;}
 .mod-indent-3 {margin-left:90px;}
@@ -756,8 +776,6 @@ sup {vertical-align: super;}
 .dir-rtl .ygtvcancel {background-position: 0 -8822px;}
 .dir-rtl .ygtvcancel:hover {background-position: 0 -8866px;}
 
-.dir-rtl .file-picker .yui-layout-unit-left  {left:500px !important;}
-.dir-rtl .file-picker .yui-layout-unit-center {left:0px !important;}
 .dir-rtl.yui-skin-sam .yui-panel .hd {text-align:left;}
 .dir-rtl .yui-skin-sam .yui-layout .yui-layout-unit div.yui-layout-bd {text-align:right;}
 
@@ -853,6 +871,7 @@ sup {vertical-align: super;}
 }
 
 .moodle-dialogue-base .moodle-dialogue {
+    outline: #000 dotted 0;
     background: none!important;
     border: 0 none!important;
 }
@@ -867,7 +886,7 @@ sup {vertical-align: super;}
     -moz-box-shadow: 5px 5px 20px 0px #666666;
 }
 
-.chooserdialogue .moodle-dialogue-hd {
+.chooserdialogue .moodle-dialogue-wrap .moodle-dialogue-hd {
     font-size:12px!important;
     font-weight: normal!important;
     letter-spacing: 1px;
@@ -888,7 +907,7 @@ sup {vertical-align: super;}
 /* Question Bank - Question Chooser "Close" button */
 #page-question-edit.dir-rtl a.container-close {right:auto;left:6px;}
 
-.chooserdialogue .moodle-dialogue-bd {
+.chooserdialogue .moodle-dialogue-wrap .moodle-dialogue-bd {
     font-size: 12px;
     color: #555555;
     overflow: auto;
@@ -917,7 +936,6 @@ sup {vertical-align: super;}
 
 /* Only set these options if we're showing the js container */
 .jsenabled .choosercontainer #chooseform .alloptions {
-    max-height: 550px;
     overflow-x: hidden;
     overflow-y: auto;
     max-width: 20.3em;
@@ -1012,7 +1030,6 @@ sup {vertical-align: super;}
     background-color: #FFFFFF;
     overflow-x: hidden;
     overflow-y: auto;
-    max-height: 550px;
     line-height: 2em;
 }
 
@@ -1051,3 +1068,7 @@ html[dir=rtl] #page-header {float: right;}
 html[dir=rtl] .formrow label.formlabel { float:right; }
 
 html[dir=rtl] .configphp {direction:ltr;text-align:left;}
+
+table.flexible .r0, table.generaltable .r0 {background-color: #F0F0F0;}
+table.flexible .r1, table.generaltable .r1 {background-color: #FAFAFA;}
+table.flexible .emptyrow {display: none;}

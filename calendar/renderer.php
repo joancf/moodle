@@ -736,6 +736,7 @@ class core_calendar_renderer extends plugin_renderer_base {
         $table->head  = array(
             get_string('colcalendar', 'calendar'),
             get_string('collastupdated', 'calendar'),
+            get_string('eventkind', 'calendar'),
             get_string('colpoll', 'calendar'),
             get_string('colactions', 'calendar')
         );
@@ -762,10 +763,12 @@ class core_calendar_renderer extends plugin_renderer_base {
 
             $cell = new html_table_cell($this->subscription_action_form($sub, $courseid));
             $cell->colspan = 2;
+            $type = $sub->eventtype . 'events';
 
             $table->data[] = new html_table_row(array(
                 new html_table_cell($label),
                 new html_table_cell($lastupdated),
+                new html_table_cell(get_string($type, 'calendar')),
                 $cell
             ));
         }
@@ -800,6 +803,7 @@ class core_calendar_renderer extends plugin_renderer_base {
                 if ($k == $subscription->pollinterval) {
                     $attributes['selected'] = 'selected';
                 }
+                $attributes['value'] = $k;
                 $html .= html_writer::tag('option', $v, $attributes);
             }
             $html .= html_writer::end_tag('select');
@@ -810,9 +814,11 @@ class core_calendar_renderer extends plugin_renderer_base {
         $html .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'course', 'value' => $courseid));
         $html .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'id', 'value' => $subscription->id));
         if (!empty($subscription->url)) {
-            $html .= html_writer::empty_tag('input', array('type' => 'submit', 'name' => 'action', 'value' => get_string('update')));
+            $html .= html_writer::tag('button', get_string('update'), array('type'  => 'submit', 'name' => 'action',
+                                                                            'value' => CALENDAR_SUBSCRIPTION_UPDATE));
         }
-        $html .= html_writer::empty_tag('input', array('type' => 'submit', 'name' => 'action', 'value' => get_string('remove')));
+        $html .= html_writer::tag('button', get_string('remove'), array('type'  => 'submit', 'name' => 'action',
+                                                                        'value' => CALENDAR_SUBSCRIPTION_REMOVE));
         $html .= html_writer::end_tag('div');
         $html .= html_writer::end_tag('form');
         return $html;

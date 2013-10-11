@@ -18,13 +18,14 @@ A definition:
             'requiremultipleidentifiers' => false,    // Optional
             'requirelockingread' => false,            // Optional
             'requirelockingwrite' => false,           // Optional
+            'requiresearchable' => false,             // Optional
             'maxsize' => null,                        // Optional
             'overrideclass' => null,                  // Optional
             'overrideclassfile' => null,              // Optional
             'datasource' => null,                     // Optional
             'datasourcefile' => null,                 // Optional
-            'persistent' => false,                    // Optional
-            'persistentmaxsize' => false,             // Optional
+            'staticacceleration' => false,            // Optional
+            'staticaccelerationsize' => false,        // Optional
             'ttl' => 0,                               // Optional
             'mappingsonly' => false                   // Optional
             'invalidationevents' => array(            // Optional
@@ -56,6 +57,27 @@ If a data source had been specified in the definition, the following would be al
     $cache = cache::make('core', 'string');
     $component = $cache->get('component');
 
+Disabling the cache stores.
+There are times in code when you will want to disable the cache stores.
+While the cache API must still be functional in order for calls to it to work it is possible to disable the use of the cache stores separately so that you can be sure only the cache will function in all circumstances.
+
+    // Disable the cache store at the start of your script with:
+    define('CACHE_DISABLE_STORES', true);
+
+    // Disable the cache within your script when you want with:
+    cache_factory::disable_stores();
+    // If you disabled it using the above means you can re-enable it with:
+    cache_factory::reset();
+
+Disabling the cache entirely.
+Like above there are times when you want the cache to avoid initialising anything it doesn't absolutely need. Things such as installation and upgrade require this functionality.
+When the cache API is disabled it is still functional however special "disabled" classes will be used instead of the regular classes that make the Cache API tick.
+These disabled classes do the least work possible and through this means we avoid all manner of intialisation and configuration.
+Once disabled it cannot be re-enabled.
+
+    // To disable the cache entirely call the following:
+    define('CACHE_DISABLE_ALL', true);
+
 Cache API parts
 ---------------
 
@@ -65,7 +87,7 @@ There are several parts that make up the Cache API.
 The loader is central to the whole thing.
 It is used by the end developer to get an object that handles caching.
 90% of end developers will not need to know or use anything else in the cache API.
-In order to get a loader you must use one of two static methods, make or make_with_params.
+In order to get a loader you must use one of two static methods, make or make_from_params.
 The loader has been kept as simple as possible, interaction is summarised by the cache_loader interface.
 Internally there is lots of magic going on. The important parts to know about are:
 * There are two ways to get a loader, the first with a definition (discussed below) the second with params. When params are used they are turned into an adhoc definition with default params.
@@ -89,6 +111,7 @@ The following points highlight things you should know about stores.
 ** Data guarantee - Data is guaranteed to exist in the cache once it is set there. It is never cleaned up to free space or because it has not been recently used.
 ** Multiple identifiers - Rather than a single string key, the parts that make up the key are passed as an array.
 ** Native TTL support - When required, the store supports native ttl and doesn't require the cache API to manage ttl of things given to the store.
+* There are two reserved store names, base and dummy. These are both used internally.
 
 ### Definition
 _Definitions were not a part of the previous proposal._
@@ -113,24 +136,24 @@ The following optional settings can also be defined:
 * requiremultipleidentifiers - If set to true then only stores that support multiple identifiers will be used.
 * requirelockingread - If set to true a lock will be acquired for reading. Don't use this setting unless you have a REALLY good reason to.
 * requirelockingwrite - If set to true a lock will be acquired before writing to the cache. Avoid this unless necessary.
+* requiresearchable - If set to true only stores that support key searching will be used for this definition. Its not recommended to use this unless absolutely unavoidable.
 * maxsize - This gives a cache an indication about the maximum items it should store. Cache stores don't have to use this, it is up to them to decide if its required.
 * overrideclass - If provided this class will be used for the loader. It must extend one of the core loader classes (based upon mode).
 * overrideclassfile - Included if required when using the overrideclass param.
 * datasource - If provided this class will be used as a data source for the definition. It must implement the cache_data_source interface.
 * datasourcefile - Included if required when using the datasource param.
-* persistent - If set to true the loader will be stored when first created and provided to subsequent requests. More on this later.
-* persistentmaxsize - If set to an int this will be the maximum number of items stored in the persistent cache.
+* staticacceleration - Any data passing through the cache will be held onto to make subsequent requests for it faster.
+* staticaccelerationsize - If set to an int this will be the maximum number of items stored in the static acceleration array.
 * ttl - Can be used to set a ttl value for data being set for this cache.
 * mappingsonly - This definition can only be used if there is a store mapping for it. More on this later.
 * invalidationevents - An array of events that should trigger this cache to invalidate.
 
 It's important to note that internally the definition is also aware of the component. This is picked up when the definition is read, based upon the location of the caches.php file.
 
-The persist option.
-As noted the persist option causes the loader generated for this definition to be stored when first created. Subsequent requests for this definition will be given the original loader instance.
+The staticacceleration option.
 Data passed to or retrieved from the loader and its chained loaders gets cached by the instance.
-This option should be used when you know you will require the loader several times and perhaps in different areas of code.
 Because it caches key=>value data it avoids the need to re-fetch things from stores after the first request. Its good for performance, bad for memory.
+Memory use can be controlled by setting the staticaccelerationsize option.
 It should be used sparingly.
 
 The mappingsonly option.

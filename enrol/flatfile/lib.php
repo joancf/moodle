@@ -121,8 +121,8 @@ class enrol_flatfile_plugin extends enrol_plugin {
                         continue;
                     }
 
-                    if (! $user = $DB->get_record("user", array("idnumber"=>$fields[2]))) {
-                        $this->log .= "Unknown user idnumber in field 3 - ignoring line\n";
+                    if (! $user = $DB->get_record("user", array("idnumber"=>$fields[2], 'deleted'=>0))) {
+                        $this->log .= "Unknown user idnumber or deleted user in field 3 - ignoring line\n";
                         continue;
                     }
 
@@ -151,7 +151,7 @@ class enrol_flatfile_plugin extends enrol_plugin {
             if(! @unlink($filename)) {
                 $eventdata = new stdClass();
                 $eventdata->modulename        = 'moodle';
-                $eventdata->component         = 'course';
+                $eventdata->component         = 'enrol_flatfile';
                 $eventdata->name              = 'flatfile_enrolment';
                 $eventdata->userfrom          = get_admin();
                 $eventdata->userto            = get_admin();
@@ -169,7 +169,7 @@ class enrol_flatfile_plugin extends enrol_plugin {
                 // Send mail to admin
                 $eventdata = new stdClass();
                 $eventdata->modulename        = 'moodle';
-                $eventdata->component         = 'course';
+                $eventdata->component         = 'enrol_flatfile';
                 $eventdata->name              = 'flatfile_enrolment';
                 $eventdata->userfrom          = get_admin();
                 $eventdata->userto            = get_admin();
@@ -280,7 +280,7 @@ class enrol_flatfile_plugin extends enrol_plugin {
 
                 $eventdata = new stdClass();
                 $eventdata->modulename        = 'moodle';
-                $eventdata->component         = 'course';
+                $eventdata->component         = 'enrol_flatfile';
                 $eventdata->name              = 'flatfile_enrolment';
                 $eventdata->userfrom          = $teacher;
                 $eventdata->userto            = $user;
@@ -303,7 +303,7 @@ class enrol_flatfile_plugin extends enrol_plugin {
 
                     $eventdata = new stdClass();
                     $eventdata->modulename        = 'moodle';
-                    $eventdata->component         = 'course';
+                    $eventdata->component         = 'enrol_flatfile';
                     $eventdata->name              = 'flatfile_enrolment';
                     $eventdata->userfrom          = $user;
                     $eventdata->userto            = $teacher;

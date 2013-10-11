@@ -125,17 +125,24 @@ class assign_feedback_file extends assign_feedback_plugin {
      * @param stdClass $grade
      * @param MoodleQuickForm $mform
      * @param stdClass $data
+     * @param int $userid The userid we are currently grading
      * @return bool true if elements were added to the form
      */
-    public function get_form_elements($grade, MoodleQuickForm $mform, stdClass $data) {
+    public function get_form_elements_for_user($grade, MoodleQuickForm $mform, stdClass $data, $userid) {
 
         $fileoptions = $this->get_file_options();
         $gradeid = $grade ? $grade->id : 0;
+        $elementname = 'files_' . $userid;
 
-
-        $data = file_prepare_standard_filemanager($data, 'files', $fileoptions, $this->assignment->get_context(), 'assignfeedback_file', ASSIGNFEEDBACK_FILE_FILEAREA, $gradeid);
-
-        $mform->addElement('filemanager', 'files_filemanager', '', null, $fileoptions);
+        $data = file_prepare_standard_filemanager($data,
+                                                  $elementname,
+                                                  $fileoptions,
+                                                  $this->assignment->get_context(),
+                                                  'assignfeedback_file',
+                                                  ASSIGNFEEDBACK_FILE_FILEAREA,
+                                                  $gradeid);
+        $mform->addElement('filemanager', $elementname . '_filemanager', html_writer::tag('span', $this->get_name(),
+            array('class' => 'accesshide')), null, $fileoptions);
 
         return true;
     }
@@ -187,8 +194,15 @@ class assign_feedback_file extends assign_feedback_plugin {
     public function save(stdClass $grade, stdClass $data) {
         $fileoptions = $this->get_file_options();
 
+        // The element name may have been for a different user.
+        foreach ($data as $key => $value) {
+            if (strpos($key, 'files_') === 0 && strpos($key, '_filemanager')) {
+                $elementname = substr($key, 0, strpos($key, '_filemanager'));
+            }
+        }
+
         $data = file_postupdate_standard_filemanager($data,
-                                                     'files',
+                                                     $elementname,
                                                      $fileoptions,
                                                      $this->assignment->get_context(),
                                                      'assignfeedback_file',
@@ -362,7 +376,8 @@ class assign_feedback_file extends assign_feedback_plugin {
                                                                 has_capability('moodle/site:viewfullnames',
                                                                 $this->assignment->get_course_context()),
                                                                 $this->assignment->is_blind_marking(),
-                                                                $this->assignment->get_uniqueid_for_user($user->id)));
+                                                                $this->assignment->get_uniqueid_for_user($user->id),
+                                                                get_extra_user_fields($this->assignment->get_context())));
             $usercount += 1;
         }
 
@@ -389,6 +404,7 @@ class assign_feedback_file extends assign_feedback_plugin {
             // Now copy each of these files to the users feedback file area.
             foreach ($users as $userid) {
                 $grade = $this->assignment->get_user_grade($userid, true);
+                $this->assignment->notify_grade_modified($grade);
 
                 $this->copy_area_files($fs,
                                        $this->assignment->get_context()->id,

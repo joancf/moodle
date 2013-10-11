@@ -57,6 +57,7 @@ class mod_assign_mod_form extends moodleform_mod {
             $mform->setType('name', PARAM_CLEANHTML);
         }
         $mform->addRule('name', null, 'required', null, 'client');
+        $mform->addRule('name', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
 
         $this->add_intro_editor(true, get_string('description', 'assign'));
 
@@ -92,10 +93,12 @@ class mod_assign_mod_form extends moodleform_mod {
         $mform->addHelpButton('submissiondrafts', 'submissiondrafts', 'assign');
         $mform->setDefault('submissiondrafts', 0);
         // submission statement
-        if (empty($config->requiresubmissionstatement)) {
+        if (empty($config->submissionstatement)) {
+            $mform->addElement('hidden', 'requiresubmissionstatement', 0);
+        } else if (empty($config->requiresubmissionstatement)) {
             $mform->addElement('selectyesno', 'requiresubmissionstatement', get_string('requiresubmissionstatement', 'assign'));
             $mform->setDefault('requiresubmissionstatement', 0);
-            $mform->addHelpButton('requiresubmissionstatement', 'requiresubmissionstatement', 'assign');
+            $mform->addHelpButton('requiresubmissionstatement', 'requiresubmissionstatementassignment', 'assign');
         } else {
             $mform->addElement('hidden', 'requiresubmissionstatement', 1);
         }

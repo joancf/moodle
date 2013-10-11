@@ -72,6 +72,8 @@ $string['batchoperationreverttodraft'] = 'revert submissions to draft';
 $string['blindmarking'] = 'Blind marking';
 $string['blindmarking_help'] = 'Blind marking hides the identity of students to markers. Blind marking settings will be locked once a submission or grade has been made in relation to this assignment.';
 $string['changegradewarning'] = 'This assignment has graded submissions and changing the grade will not automatically re-calculate existing submission grades. You must re-grade all existing submissions, if you wish to change the grade.';
+$string['choosegradingaction'] = 'Grading action';
+$string['chooseoperation'] = 'Choose operation';
 $string['comment'] = 'Comment';
 $string['completionsubmit'] = 'Student must submit to this activity to complete it';
 $string['conversionexception'] = 'Could not convert assignment. Exception was: {$a}.';
@@ -86,7 +88,7 @@ $string['couldnotfindassignmenttoupgrade'] = 'Could not find old assignment inst
 $string['currentgrade'] = 'Current grade in gradebook';
 $string['cutoffdate'] = 'Cut-off date';
 $string['cutoffdate_help'] = 'If set, the assignment will not accept submissions after this date without an extension.';
-$string['cutoffdatevalidation'] = 'Cut-off date must be after the due date.';
+$string['cutoffdatevalidation'] = 'The cut-off date cannot be earlier than the due date.';
 $string['cutoffdatefromdatevalidation'] = 'Cut-off date must be after the allow submissions from date.';
 $string['defaultplugins'] = 'Default assignment settings';
 $string['defaultplugins_help'] = 'These settings define the defaults for all new assignments.';
@@ -101,6 +103,7 @@ $string['download all submissions'] = 'Download all submissions in a zip file.';
 $string['duedate'] = 'Due date';
 $string['duedate_help'] = 'This is when the assignment is due. Submissions will still be allowed after this date but any assignments submitted after this date are marked as late. To prevent submissions after a certain date - set the assignment cut off date.';
 $string['duedateno'] = 'No due date';
+$string['submissionempty'] = 'Nothing was submitted';
 $string['duedatereached'] = 'The due date for this assignment has now passed';
 $string['duedatevalidation'] = 'Due date must be after the allow submissions from date.';
 $string['editsubmission'] = 'Edit my submission';
@@ -119,6 +122,7 @@ $string['gradersubmissionupdatedhtml'] = '{$a->username} has updated their assig
 for <i>\'{$a->assignment}\'  at {$a->timeupdated}</i><br /><br />
 It is <a href="{$a->url}">available on the web site</a>.';
 $string['gradersubmissionupdatedsmall'] = '{$a->username} has updated their submission for assignment {$a->assignment}.';
+$string['gradeuser'] = 'Grade {$a}';
 $string['grantextension'] = 'Grant extension';
 $string['grantextensionforusers'] = 'Grant extension for {$a} students';
 $string['enabled'] = 'Enabled';
@@ -151,6 +155,7 @@ $string['graded'] = 'Graded';
 $string['gradedon'] = 'Graded on';
 $string['gradebelowzero'] = 'Grade must be greater than or equal to zero.';
 $string['gradeabovemaximum'] = 'Grade must be less than or equal to {$a}.';
+$string['gradelocked'] = 'This grade is locked or overridden in the gradebook.';
 $string['gradeoutof'] = 'Grade out of {$a}';
 $string['gradeoutofhelp'] = 'Grade';
 $string['gradeoutofhelp_help'] = 'Enter the grade for the student\'s submission here. You may include decimals.';
@@ -179,7 +184,7 @@ $string['messageprovider:assign_notification'] = 'Assignment notifications';
 $string['modulename'] = 'Assignment';
 $string['modulename_help'] = 'The assignment activity module enables a teacher to communicate tasks, collect work and provide grades and feedback.
 
-Students can submit any digital content (files), such as word-processed documents, spreadsheets, images, or audio and video clips. Alternatively, or in addition, the assignment may require students to type text directly into the text editor. An assignment can also be used to remind students of \'real-world\' assignments they need to complete offline, such as art work, and thus not require any digital content.
+Students can submit any digital content (files), such as word-processed documents, spreadsheets, images, or audio and video clips. Alternatively, or in addition, the assignment may require students to type text directly into the text editor. An assignment can also be used to remind students of \'real-world\' assignments they need to complete offline, such as art work, and thus not require any digital content. Students can submit work individually or as a member of a group.
 
 When reviewing assignments, teachers can leave feedback comments and upload files, such as marked-up student submissions, documents with comments or spoken audio feedback. Assignments can be graded using a numerical or custom scale or an advanced grading method such as a rubric. Final grades are recorded in the gradebook.';
 $string['modulename_link'] = 'mod/assignment/view';
@@ -222,6 +227,8 @@ $string['quickgradingchangessaved'] = 'The grade changes were saved';
 $string['quickgrading_help'] = 'Quick grading allows you to assign grades (and outcomes) directly in the submissions table. Quick grading is not compatible with advanced grading and is not recommended when there are multiple markers.';
 $string['requiresubmissionstatement'] = 'Require that students accept the submission statement';
 $string['requiresubmissionstatement_help'] = 'Require that students accept the submission statement for all assignment submissions for this entire Moodle installation. If this setting is not enabled, then submission statements can be enabled or disabled in the settings for each assignment.';
+$string['requiresubmissionstatementassignment'] = 'Require that students accept the submission statement';
+$string['requiresubmissionstatementassignment_help'] = 'Require that students accept the submission statement for all submissions to this assignment.';
 $string['requireallteammemberssubmit'] = 'Require all group members submit';
 $string['requireallteammemberssubmit_help'] = 'If enabled, all members of the student group must click the submit button for this assignment before the group submission will be considered as submitted. If disabled, the group submission will be considered as submitted as soon as any member of the student group clicks the submit button.';
 $string['recordid'] = 'Identifier';
@@ -270,6 +277,7 @@ $string['submissionsclosed'] = 'Submissions closed';
 $string['submissionsettings'] = 'Submission settings';
 $string['submissionstatement'] = 'Submission statement';
 $string['submissionstatement_help'] = 'Assignment submission confirmation statement';
+$string['submissionstatementdefault'] = 'This assignment is my own work, except where I have acknowledged the use of the works of other people.';
 $string['submissionstatementacceptedlog'] = 'Submission statement accepted by user {$a}';
 $string['submissionstatus_draft'] = 'Draft (not submitted)';
 $string['submissionstatusheading'] = 'Submission status';

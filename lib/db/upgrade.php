@@ -227,17 +227,10 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2012030100.01);
     }
 
-    if ($oldversion < 2012030100.02) {
-        // migrate all numbers to signed - it should be safe to interrupt this and continue later
-        upgrade_mysql_fix_unsigned_columns();
-
-        // Main savepoint reached
-        upgrade_main_savepoint(true, 2012030100.02);
-    }
-
     if ($oldversion < 2012030900.01) {
-        // migrate all texts and binaries to big size - it should be safe to interrupt this and continue later
-        upgrade_mysql_fix_lob_columns();
+        // Migrate all numbers to signed & all texts and binaries to big size.
+        // It should be safe to interrupt this and continue later.
+        upgrade_mysql_fix_unsigned_and_lob_columns();
 
         // Main savepoint reached
         upgrade_main_savepoint(true, 2012030900.01);
@@ -1467,12 +1460,324 @@ function xmldb_main_upgrade($oldversion) {
 
     if ($oldversion < 2012111200.01) {
         // Force the rebuild of the cache of every courses, some cached information could contain wrong icon references.
-        rebuild_course_cache();
+        $DB->execute('UPDATE {course} set modinfo = ?, sectioncache = ?', array(null, null));
 
         // Main savepoint reached.
         upgrade_main_savepoint(true, 2012111200.01);
     }
 
+    if ($oldversion < 2012111601.01) {
+        // Clea up after old shared memory caching support.
+        unset_config('cachetype');
+        unset_config('rcache');
+        unset_config('rcachettl');
+        unset_config('intcachemax');
+        unset_config('memcachedhosts');
+        unset_config('memcachedpconn');
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012111601.01);
+    }
+
+    if ($oldversion < 2012112100.00) {
+
+        // Define field eventtype to be added to event_subscriptions.
+        $table = new xmldb_table('event_subscriptions');
+        $field = new xmldb_field('eventtype', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null, 'userid');
+
+        // Conditionally launch add field eventtype.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012112100.00);
+    }
+
+    // Moodle v2.4.0 release upgrade line
+    // Put any upgrade step following this
+
+
+    if ($oldversion < 2012120300.01) {
+        // Make sure site-course has format='site' //MDL-36840
+
+        if ($SITE->format !== 'site') {
+            $DB->set_field('course', 'format', 'site', array('id' => $SITE->id));
+            $SITE->format = 'site';
+        }
+
+        // Main savepoint reached
+        upgrade_main_savepoint(true, 2012120300.01);
+    }
+
+    if ($oldversion < 2012120300.04) {
+        // Remove "_utf8" suffix from all langs in course table.
+        $langs = $DB->get_records_sql("SELECT DISTINCT lang FROM {course} WHERE lang LIKE ?", array('%_utf8'));
+
+        foreach ($langs as $lang=>$unused) {
+            $newlang = str_replace('_utf8', '', $lang);
+            $sql = "UPDATE {course} SET lang = :newlang WHERE lang = :lang";
+            $DB->execute($sql, array('newlang'=>$newlang, 'lang'=>$lang));
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120300.04);
+    }
+
+    if ($oldversion < 2012120301.09) {
+        // Add the site identifier to the cache config's file.
+        $siteidentifier = $DB->get_field('config', 'value', array('name' => 'siteidentifier'));
+        cache_helper::update_site_identifier($siteidentifier);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120301.09);
+    }
+
+    if ($oldversion < 2012120301.10) {
+        // Fixing possible wrong MIME types for SMART Notebook files.
+        $extensions = array('%.gallery', '%.galleryitem', '%.gallerycollection', '%.nbk', '%.notebook', '%.xbk');
+        $select = $DB->sql_like('filename', '?', false);
+        foreach ($extensions as $extension) {
+            $DB->set_field_select(
+                'files',
+                'mimetype',
+                'application/x-smarttech-notebook',
+                $select,
+                array($extension)
+            );
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120301.10);
+    }
+
+    if ($oldversion < 2012120301.11) {
+        // Retrieve the list of course_sections as a recordset to save memory
+        $coursesections = $DB->get_recordset('course_sections', null, 'course, id', 'id, course, sequence');
+        foreach ($coursesections as $coursesection) {
+            // Retrieve all of the actual modules in this course and section combination to reduce DB calls
+            $actualsectionmodules = $DB->get_records('course_modules',
+                    array('course' => $coursesection->course, 'section' => $coursesection->id), '', 'id, section');
+
+            // Break out the current sequence so that we can compare it
+            $currentsequence = explode(',', $coursesection->sequence);
+            $newsequence = array();
+
+            // Check each of the modules in the current sequence
+            foreach ($currentsequence as $module) {
+                if (isset($actualsectionmodules[$module])) {
+                    $newsequence[] = $module;
+                    // We unset the actualsectionmodules so that we don't get duplicates and that we can add orphaned
+                    // modules later
+                    unset($actualsectionmodules[$module]);
+                }
+            }
+
+            // Append any modules which have somehow been orphaned
+            foreach ($actualsectionmodules as $module) {
+                $newsequence[] = $module->id;
+            }
+
+            // Piece it all back together
+            $sequence = implode(',', $newsequence);
+
+            // Only update if there have been changes
+            if ($sequence !== $coursesection->sequence) {
+                $coursesection->sequence = $sequence;
+                $DB->update_record('course_sections', $coursesection);
+
+                // And clear the sectioncache and modinfo cache - they'll be regenerated on next use
+                $course = new stdClass();
+                $course->id = $coursesection->course;
+                $course->sectioncache = null;
+                $course->modinfo = null;
+                $DB->update_record('course', $course);
+            }
+        }
+        $coursesections->close();
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120301.11);
+    }
+
+    if ($oldversion < 2012120301.13) {
+        // Delete entries regarding invalid 'interests' option which breaks course.
+        $DB->delete_records('course_sections_avail_fields', array('userfield' => 'interests'));
+        $DB->delete_records('course_modules_avail_fields', array('userfield' => 'interests'));
+        // Clear course cache (will be rebuilt on first visit) in case of changes to these.
+        $DB->execute('UPDATE {course} set modinfo = ?, sectioncache = ?', array(null, null));
+
+        upgrade_main_savepoint(true, 2012120301.13);
+    }
+
+    if ($oldversion < 2012120302.01) {
+        // Retrieve the list of course_sections as a recordset to save memory.
+        // This is to fix a regression caused by MDL-37939.
+        // In this case the upgrade step is fixing records where:
+        // The data in course_sections.sequence contains the correct module id
+        // The section field for on the course modules table may have been updated to point to the incorrect id.
+
+        // This query is looking for sections where the sequence is not in sync with the course_modules table.
+        // The syntax for the like query is looking for a value in a comma separated list.
+        // It adds a comma to either site of the list and then searches for LIKE '%,id,%'.
+        $sequenceconcat = $DB->sql_concat("','", 's.sequence', "','");
+        $moduleconcat = $DB->sql_concat("'%,'", 'cm.id', "',%'");
+        $sql = 'SELECT s2.id, s2.course, s2.sequence
+                FROM {course_sections} s2
+                JOIN(
+                    SELECT DISTINCT s.id
+                    FROM
+                    {course_modules} cm
+                    JOIN {course_sections} s
+                    ON
+                        cm.course = s.course
+                    WHERE cm.section != s.id AND ' . $sequenceconcat . ' LIKE ' . $moduleconcat . '
+                ) d
+                ON s2.id = d.id';
+        $coursesections = $DB->get_recordset_sql($sql);
+
+        foreach ($coursesections as $coursesection) {
+            // Retrieve all of the actual modules in this course and section combination to reduce DB calls.
+            $actualsectionmodules = $DB->get_records('course_modules',
+                    array('course' => $coursesection->course, 'section' => $coursesection->id), '', 'id, section');
+
+            // Break out the current sequence so that we can compare it.
+            $currentsequence = explode(',', $coursesection->sequence);
+            $orphanlist = array();
+
+            // Check each of the modules in the current sequence.
+            foreach ($currentsequence as $cmid) {
+                if (!empty($cmid) && !isset($actualsectionmodules[$cmid])) {
+                    $orphanlist[] = $cmid;
+                }
+            }
+
+            if (!empty($orphanlist)) {
+                list($sql, $params) = $DB->get_in_or_equal($orphanlist, SQL_PARAMS_NAMED);
+                $sql = "id $sql";
+
+                $DB->set_field_select('course_modules', 'section', $coursesection->id, $sql, $params);
+
+                // And clear the sectioncache and modinfo cache - they'll be regenerated on next use.
+                $course = new stdClass();
+                $course->id = $coursesection->course;
+                $course->sectioncache = null;
+                $course->modinfo = null;
+                $DB->update_record('course', $course);
+            }
+        }
+        $coursesections->close();
+
+        upgrade_main_savepoint(true, 2012120302.01);
+    }
+
+    if ($oldversion < 2012120303.02) {
+        // Fixing possible wrong MIME type for MIME HTML (MHTML) files.
+        $extensions = array('%.mht', '%.mhtml');
+        $select = $DB->sql_like('filename', '?', false);
+        foreach ($extensions as $extension) {
+            $DB->set_field_select(
+                'files',
+                'mimetype',
+                'message/rfc822',
+                $select,
+                array($extension)
+            );
+        }
+        upgrade_main_savepoint(true, 2012120303.02);
+    }
+
+    if ($oldversion < 2012120303.06) {
+        // MDL-29877 Some bad restores created grade items with no category information.
+        $sql = "UPDATE {grade_items}
+                   SET categoryid = courseid
+                 WHERE itemtype <> 'course' and itemtype <> 'category'
+                       AND categoryid IS NULL";
+        $DB->execute($sql);
+        upgrade_main_savepoint(true, 2012120303.06);
+    }
+
+    if ($oldversion < 2012120303.08) {
+        require_once($CFG->dirroot.'/cache/locallib.php');
+        // The features bin needs updating.
+        cache_config_writer::update_default_config_stores();
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120303.08);
+    }
+
+    if ($oldversion < 2012120303.09) {
+        // Adding index to unreadmessageid field of message_working table (MDL-34933)
+        $table = new xmldb_table('message_working');
+        $index = new xmldb_index('unreadmessageid_idx', XMLDB_INDEX_NOTUNIQUE, array('unreadmessageid'));
+
+        // Conditionally launch add index unreadmessageid
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120303.09);
+    }
+
+    if ($oldversion < 2012120304.01) {
+        // Fix incorrect cc-nc url. Unfortunately the license 'plugins' do
+        // not give a mechanism to do this.
+
+        $sql = "UPDATE {license}
+                   SET source = :url, version = :newversion
+                 WHERE shortname = :shortname AND version = :oldversion";
+
+        $params = array(
+            'url' => 'http://creativecommons.org/licenses/by-nc/3.0/',
+            'shortname' => 'cc-nc',
+            'newversion' => '2013051500',
+            'oldversion' => '2010033100'
+        );
+
+        $DB->execute($sql, $params);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120304.01);
+    }
+
+    if ($oldversion < 2012120304.06) {
+        // Clean up old tokens which haven't been deleted.
+        $DB->execute("DELETE FROM {user_private_key} WHERE NOT EXISTS
+                         (SELECT 'x' FROM {user} WHERE deleted = 0 AND id = userid)");
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120304.06);
+    }
+
+    if ($oldversion < 2012120305.01) {
+
+        // Remove orphan repository instances.
+        if ($DB->get_dbfamily() === 'mysql') {
+            $sql = "DELETE {repository_instances} FROM {repository_instances}
+                    LEFT JOIN {context} ON {context}.id = {repository_instances}.contextid
+                    WHERE {context}.id IS NULL";
+        } else {
+            $sql = "DELETE FROM {repository_instances}
+                    WHERE NOT EXISTS (
+                        SELECT 'x' FROM {context}
+                        WHERE {context}.id = {repository_instances}.contextid)";
+        }
+        $DB->execute($sql);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120305.01);
+    }
+
+    if ($oldversion < 2012120305.08) {
+        // Convert name field in event table to text type as RFC-2445 doesn't have any limitation on it.
+        $table = new xmldb_table('event');
+        $field = new xmldb_field('name', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null, 'id');
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->change_field_type($table, $field);
+        }
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2012120305.08);
+    }
 
     return true;
 }

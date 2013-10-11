@@ -106,6 +106,7 @@ function quiz_add_instance($quiz) {
  */
 function quiz_update_instance($quiz, $mform) {
     global $CFG, $DB;
+    require_once($CFG->dirroot . '/mod/quiz/locallib.php');
 
     // Process the options from the form.
     $result = quiz_process_options($quiz);
@@ -113,11 +114,16 @@ function quiz_update_instance($quiz, $mform) {
         return $result;
     }
 
+    // Get the current value, so we can see what changed.
     $oldquiz = $DB->get_record('quiz', array('id' => $quiz->instance));
+
+    // We need two values from the existing DB record that are not in the form,
+    // in some of the function calls below.
+    $quiz->sumgrades = $oldquiz->sumgrades;
+    $quiz->grade     = $oldquiz->grade;
 
     // Repaginate, if asked to.
     if (!$quiz->shufflequestions && !empty($quiz->repaginatenow)) {
-        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
         $quiz->questions = quiz_repaginate(quiz_clean_layout($oldquiz->questions, true),
                 $quiz->questionsperpage);
     }
@@ -131,11 +137,15 @@ function quiz_update_instance($quiz, $mform) {
     quiz_after_add_or_update($quiz);
 
     if ($oldquiz->grademethod != $quiz->grademethod) {
-        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
-        $quiz->sumgrades = $oldquiz->sumgrades;
-        $quiz->grade = $oldquiz->grade;
         quiz_update_all_final_grades($quiz);
         quiz_update_grades($quiz);
+    }
+
+    $quizdateschanged = $oldquiz->timelimit   != $quiz->timelimit
+                     || $oldquiz->timeclose   != $quiz->timeclose
+                     || $oldquiz->graceperiod != $quiz->graceperiod;
+    if ($quizdateschanged) {
+        quiz_update_open_attempts(array('quizid' => $quiz->id));
     }
 
     // Delete any previous preview attempts.
@@ -284,13 +294,25 @@ function quiz_update_effective_access($quiz, $userid) {
             $override->timeopen = min($opens);
         }
         if (is_null($override->timeclose) && count($closes)) {
-            $override->timeclose = max($closes);
+            if (in_array(0, $closes)) {
+                $override->timeclose = 0;
+            } else {
+                $override->timeclose = max($closes);
+            }
         }
         if (is_null($override->timelimit) && count($limits)) {
-            $override->timelimit = max($limits);
+            if (in_array(0, $limits)) {
+                $override->timelimit = 0;
+            } else {
+                $override->timelimit = max($limits);
+            }
         }
         if (is_null($override->attempts) && count($attempts)) {
-            $override->attempts = max($attempts);
+            if (in_array(0, $attempts)) {
+                $override->attempts = 0;
+            } else {
+                $override->attempts = max($attempts);
+            }
         }
         if (is_null($override->password) && count($passwords)) {
             $override->password = array_shift($passwords);
@@ -446,32 +468,20 @@ function quiz_user_complete($course, $user, $mod, $quiz) {
  */
 function quiz_cron() {
     global $CFG;
+
+    require_once($CFG->dirroot . '/mod/quiz/cronlib.php');
     mtrace('');
 
-    // Since the quiz specifies $module->cron = 60, so that the subplugins can
-    // have frequent cron if they need it, we now need to do our own scheduling.
-    $quizconfig = get_config('quiz');
-    if (!isset($quizconfig->overduelastrun)) {
-        $quizconfig->overduelastrun = 0;
-        $quizconfig->overduedoneto  = 0;
-    }
-
     $timenow = time();
-    if ($timenow > $quizconfig->overduelastrun + 3600) {
-        require_once($CFG->dirroot . '/mod/quiz/cronlib.php');
-        $overduehander = new mod_quiz_overdue_attempt_updater();
+    $overduehander = new mod_quiz_overdue_attempt_updater();
 
-        $processto = $timenow - $quizconfig->graceperiodmin;
+    $processto = $timenow - get_config('quiz', 'graceperiodmin');
 
-        mtrace('  Looking for quiz overdue quiz attempts between ' .
-                userdate($quizconfig->overduedoneto) . ' and ' . userdate($processto) . '...');
+    mtrace('  Looking for quiz overdue quiz attempts...');
 
-        list($count, $quizcount) = $overduehander->update_overdue_attempts($timenow, $quizconfig->overduedoneto, $processto);
-        set_config('overduelastrun', $timenow, 'quiz');
-        set_config('overduedoneto', $processto, 'quiz');
+    list($count, $quizcount) = $overduehander->update_overdue_attempts($timenow, $processto);
 
-        mtrace('  Considered ' . $count . ' attempts in ' . $quizcount . ' quizzes.');
-    }
+    mtrace('  Considered ' . $count . ' attempts in ' . $quizcount . ' quizzes.');
 
     // Run cron for our sub-plugin types.
     cron_execute_plugin_type('quiz', 'quiz reports');
@@ -709,6 +719,13 @@ function quiz_grade_item_update($quiz, $grades = null) {
         $params['hidden'] = 0;
     }
 
+    if (!$params['hidden']) {
+        // If the grade item is not hidden by the quiz logic, then we need to
+        // hide it if the quiz is hidden from students.
+        $cm = get_coursemodule_from_instance('quiz', $quiz->id);
+        $params['hidden'] = !$cm->visible;
+    }
+
     if ($grades  === 'reset') {
         $params['reset'] = true;
         $grades = null;
@@ -721,18 +738,19 @@ function quiz_grade_item_update($quiz, $grades = null) {
             // NOTE: this is an extremely nasty hack! It is not a bug if this confirmation fails badly. --skodak.
             $confirm_regrade = optional_param('confirm_regrade', 0, PARAM_INT);
             if (!$confirm_regrade) {
-                $message = get_string('gradeitemislocked', 'grades');
-                $back_link = $CFG->wwwroot . '/mod/quiz/report.php?q=' . $quiz->id .
-                        '&amp;mode=overview';
-                $regrade_link = qualified_me() . '&amp;confirm_regrade=1';
-                echo $OUTPUT->box_start('generalbox', 'notice');
-                echo '<p>'. $message .'</p>';
-                echo $OUTPUT->container_start('buttons');
-                echo $OUTPUT->single_button($regrade_link, get_string('regradeanyway', 'grades'));
-                echo $OUTPUT->single_button($back_link,  get_string('cancel'));
-                echo $OUTPUT->container_end();
-                echo $OUTPUT->box_end();
-
+                if (!AJAX_SCRIPT) {
+                    $message = get_string('gradeitemislocked', 'grades');
+                    $back_link = $CFG->wwwroot . '/mod/quiz/report.php?q=' . $quiz->id .
+                            '&amp;mode=overview';
+                    $regrade_link = qualified_me() . '&amp;confirm_regrade=1';
+                    echo $OUTPUT->box_start('generalbox', 'notice');
+                    echo '<p>'. $message .'</p>';
+                    echo $OUTPUT->container_start('buttons');
+                    echo $OUTPUT->single_button($regrade_link, get_string('regradeanyway', 'grades'));
+                    echo $OUTPUT->single_button($back_link,  get_string('cancel'));
+                    echo $OUTPUT->container_end();
+                    echo $OUTPUT->box_end();
+                }
                 return GRADE_UPDATE_ITEM_LOCKED;
             }
         }
@@ -1640,7 +1658,7 @@ function quiz_extend_settings_navigation($settings, $quiznode) {
                 array('cmid'=>$PAGE->cm->id, 'sesskey'=>sesskey()));
         $node = navigation_node::create(get_string('preview', 'quiz'), $url,
                 navigation_node::TYPE_SETTING, null, 'mod_quiz_preview',
-                new pix_icon('t/preview', ''));
+                new pix_icon('i/preview', ''));
         $quiznode->add_node($node, $beforekey);
     }
 

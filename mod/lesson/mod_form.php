@@ -89,6 +89,7 @@ class mod_lesson_mod_form extends moodleform_mod {
             $mform->setType('name', PARAM_CLEANHTML);
         }
         $mform->addRule('name', null, 'required', null, 'client');
+        $mform->addRule('name', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
 
         // Create a text box that can be enabled/disabled for lesson time limit
         $timedgrp = array();
@@ -133,6 +134,7 @@ class mod_lesson_mod_form extends moodleform_mod {
         $mform->setType('password', PARAM_RAW);
         $mform->setAdvanced('password');
         $mform->disabledIf('password', 'usepassword', 'eq', 0);
+        $mform->disabledIf('passwordunmask', 'usepassword', 'eq', 0);
 
         $this->standard_grading_coursemodule_elements();
 
@@ -259,11 +261,14 @@ class mod_lesson_mod_form extends moodleform_mod {
 //-------------------------------------------------------------------------------
         $mform->addElement('header', 'mediafileheader', get_string('mediafile', 'lesson'));
 
-        $filepickeroptions = array();
-        $filepickeroptions['filetypes'] = '*';
-        $filepickeroptions['maxbytes'] = $this->course->maxbytes;
-        $mform->addElement('filepicker', 'mediafilepicker', get_string('mediafile', 'lesson'), null, $filepickeroptions);
-        $mform->addHelpButton('mediafilepicker', 'mediafile', 'lesson');
+        $filemanageroptions = array();
+        $filemanageroptions['filetypes'] = '*';
+        $filemanageroptions['maxbytes'] = $this->course->maxbytes;
+        $filemanageroptions['subdirs'] = 0;
+        $filemanageroptions['maxfiles'] = 1;
+
+        $mform->addElement('filemanager', 'mediafile', get_string('mediafile', 'lesson'), null, $filemanageroptions);
+        $mform->addHelpButton('mediafile', 'mediafile', 'lesson');
 
 //-------------------------------------------------------------------------------
         $mform->addElement('header', 'dependencyon', get_string('dependencyon', 'lesson'));
@@ -321,9 +326,9 @@ class mod_lesson_mod_form extends moodleform_mod {
 
         if ($this->current->instance) {
             // editing existing instance - copy existing files into draft area
-            $draftitemid = file_get_submitted_draft_itemid('mediafilepicker');
+            $draftitemid = file_get_submitted_draft_itemid('mediafile');
             file_prepare_draft_area($draftitemid, $this->context->id, 'mod_lesson', 'mediafile', 0, array('subdirs'=>0, 'maxbytes' => $this->course->maxbytes, 'maxfiles' => 1));
-            $default_values['mediafilepicker'] = $draftitemid;
+            $default_values['mediafile'] = $draftitemid;
         }
     }
 

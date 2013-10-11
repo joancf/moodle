@@ -37,7 +37,7 @@ YUI.add('moodle-course-toolboxes', function(Y) {
         CONDITIONALHIDDEN : 'conditionalhidden',
         AVAILABILITYINFODIV : 'div.availabilityinfo',
         SHOWCLASS : 'editing_show',
-        ACCESSHIDECLASS : 'accesshide'
+        HIDECLASS : 'hide'
     };
 
     /**
@@ -64,7 +64,7 @@ YUI.add('moodle-course-toolboxes', function(Y) {
             var toggle_class;
             if (this.is_label(element)) {
                 toggle_class = CSS.DIMMEDTEXT;
-                dimarea = element.one(CSS.MODINDENTDIV + ' div');
+                dimarea = element.all(CSS.MODINDENTDIV + ' > div').item(1);
             } else {
                 toggle_class = CSS.DIMCLASS;
                 dimarea = element.one('a');
@@ -99,7 +99,7 @@ YUI.add('moodle-course-toolboxes', function(Y) {
             var availabilityinfo = element.one(CSS.AVAILABILITYINFODIV);
 
             if (availabilityinfo) {
-                availabilityinfo.toggleClass(CSS.ACCESSHIDECLASS);
+                availabilityinfo.toggleClass(CSS.HIDECLASS);
             }
             return value;
         },
@@ -259,15 +259,6 @@ YUI.add('moodle-course-toolboxes', function(Y) {
         },
         _setup_for_resource : function(toolboxtarget) {
             toolboxtarget = Y.one(toolboxtarget);
-            // "Disable" show/hide icons (change cursor to not look clickable) if section is hidden
-            var showhide = toolboxtarget.all(CSS.COMMANDSPAN + ' ' + CSS.HIDE);
-            showhide.concat(toolboxtarget.all(CSS.COMMANDSPAN + ' ' + CSS.SHOW));
-            showhide.each(function(node) {
-                var section = node.ancestor(CSS.SECTIONLI);
-                if (section && section.hasClass(CSS.SECTIONHIDDENCLASS)) {
-                    node.setStyle('cursor', 'auto');
-                }
-            });
 
             // Set groupmode attribute for use by this.toggle_groupmode()
             var groups;
@@ -479,7 +470,6 @@ YUI.add('moodle-course-toolboxes', function(Y) {
                 .setAttribute('href', newlink)
                 .setAttribute('title', left_string);
             anchor.appendChild(newicon);
-            anchor.on('click', this.move_left, this);
             moveright.insert(anchor, 'before');
         },
         /**
@@ -519,7 +509,9 @@ YUI.add('moodle-course-toolboxes', function(Y) {
                 .setAttrs({
                     'name'  : 'title',
                     'value' : titletext,
-                    'autocomplete' : 'off'
+                    'autocomplete' : 'off',
+                    'aria-describedby' : 'id_editinstructions',
+                    'maxLength' : '255'
                 })
                 .addClass('titleeditor');
             var editform = Y.Node.create('<form />')
@@ -527,6 +519,7 @@ YUI.add('moodle-course-toolboxes', function(Y) {
                 .setAttribute('action', '#');
             var editinstructions = Y.Node.create('<span />')
                 .addClass('editinstructions')
+                .setAttrs({'id' : 'id_editinstructions'})
                 .set('innerHTML', M.util.get_string('edittitleinstructions', 'moodle'));
             var activityicon = element.one('img.activityicon').cloneNode();
 
@@ -568,8 +561,9 @@ YUI.add('moodle-course-toolboxes', function(Y) {
             // Cancel the edit if we lose focus or the escape key is pressed
             thisevent = editor.on('blur', cancel_edittitle);
             listenevents.push(thisevent);
-            thisevent = Y.one('document').on('keyup', function(e) {
-                if (e.keyCode == 27) {
+            thisevent = Y.one('document').on('keydown', function(e) {
+                if (e.keyCode === 27) {
+                    e.preventDefault();
                     cancel_edittitle(e);
                 }
             });
@@ -602,6 +596,26 @@ YUI.add('moodle-course-toolboxes', function(Y) {
                 }
             }, this);
             listenevents.push(thisevent);
+        },
+        /**
+         * Set the visibility of the current resource (identified by the element)
+         * to match the hidden parameter (this is not a toggle).
+         * Only changes the visibility in the browser (no ajax update).
+         * @param args An object with 'element' being the A node containing the resource
+         *             and 'visible' being the state that the visiblity should be set to.
+         * @return void
+         */
+        set_visibility_resource_ui: function(args) {
+            var element = args.element;
+            var shouldbevisible = args.visible;
+            var buttonnode = element.one(CSS.SHOW);
+            var visible = (buttonnode === null);
+            if (visible) {
+                buttonnode = element.one(CSS.HIDE);
+            }
+            if (visible != shouldbevisible) {
+                this.toggle_hide_resource_ui(buttonnode);
+            }
         }
     }, {
         NAME : 'course-resource-toolbox',
@@ -708,12 +722,6 @@ YUI.add('moodle-course-toolboxes', function(Y) {
 
                 if (Y.Array.indexOf(response.resourcestotoggle, activityid) != -1) {
                     this.toggle_hide_resource_ui(button);
-                }
-
-                if (value == 0) {
-                    button.setStyle('cursor', 'auto');
-                } else {
-                    button.setStyle('cursor', 'pointer');
                 }
             }, this);
         },

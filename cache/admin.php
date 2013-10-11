@@ -100,7 +100,7 @@ if (!empty($action) && confirm_sesskey()) {
 
             if (!array_key_exists($store, $stores)) {
                 $notifysuccess = false;
-                $notification = get_string('invalidstore');
+                $notification = get_string('invalidstore', 'cache');
             } else if ($stores[$store]['mappings'] > 0) {
                 $notifysuccess = false;
                 $notification = get_string('deletestorehasmappings', 'cache');
@@ -129,7 +129,7 @@ if (!empty($action) && confirm_sesskey()) {
             }
             break;
         case 'editdefinitionmapping' : // Edit definition mappings.
-            $definition = required_param('definition', PARAM_TEXT);
+            $definition = required_param('definition', PARAM_SAFEPATH);
             $title = get_string('editdefinitionmappings', 'cache', $definition);
             $mform = new cache_definition_mappings_form($PAGE->url, array('definition' => $definition));
             if ($mform->is_cancelled()) {

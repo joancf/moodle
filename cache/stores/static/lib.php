@@ -29,12 +29,64 @@
 defined('MOODLE_INTERNAL') || die();
 
 /**
+ * The static data store class
+ *
+ * @copyright  2012 Sam Hemelryk
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+abstract class static_data_store extends cache_store {
+
+    /**
+     * An array for storage.
+     * @var array
+     */
+    private static $staticstore = array();
+
+    /**
+     * Returns a static store by reference... REFERENCE SUPER IMPORTANT.
+     *
+     * @param string $id
+     * @return array
+     */
+    protected static function &register_store_id($id) {
+        if (!array_key_exists($id, self::$staticstore)) {
+            self::$staticstore[$id] = array();
+        }
+        return self::$staticstore[$id];
+    }
+
+    /**
+     * Flushes the store of all values for belonging to the store with the given id.
+     * @param string $id
+     */
+    protected static function flush_store_by_id($id) {
+        unset(self::$staticstore[$id]);
+        self::$staticstore[$id] = array();
+    }
+
+    /**
+     * Flushes all of the values from all stores.
+     *
+     * @copyright  2012 Sam Hemelryk
+     * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+     */
+    protected static function flush_store() {
+        $ids = array_keys(self::$staticstore);
+        unset(self::$staticstore);
+        self::$staticstore = array();
+        foreach ($ids as $id) {
+            self::$staticstore[$id] = array();
+        }
+    }
+}
+
+/**
  * The static store class.
  *
  * @copyright  2012 Sam Hemelryk
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class cachestore_static extends static_data_store implements cache_store, cache_is_key_aware {
+class cachestore_static extends static_data_store implements cache_is_key_aware, cache_is_searchable {
 
     /**
      * The name of the store
@@ -81,7 +133,19 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      */
     public static function get_supported_features(array $configuration = array()) {
         return self::SUPPORTS_DATA_GUARANTEE +
-               self::SUPPORTS_NATIVE_TTL;
+               self::SUPPORTS_NATIVE_TTL +
+               self::IS_SEARCHABLE;
+    }
+
+    /**
+     * Returns false as this store does not support multiple identifiers.
+     * (This optional function is a performance optimisation; it must be
+     * consistent with the value from get_supported_features.)
+     *
+     * @return bool False
+     */
+    public function supports_multiple_identifiers() {
+        return false;
     }
 
     /**
@@ -111,33 +175,6 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      */
     public static function is_supported_mode($mode) {
         return ($mode === self::MODE_REQUEST);
-    }
-
-    /**
-     * Returns true if the store instance guarantees data.
-     *
-     * @return bool
-     */
-    public function supports_data_guarantee() {
-        return true;
-    }
-
-    /**
-     * Returns true if the store instance supports multiple identifiers.
-     *
-     * @return bool
-     */
-    public function supports_multiple_identifiers() {
-        return false;
-    }
-
-    /**
-     * Returns true if the store instance supports native ttl.
-     *
-     * @return bool
-     */
-    public function supports_native_ttl() {
-        return true;
     }
 
     /**
@@ -177,11 +214,10 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      * @return mixed The data that was associated with the key, or false if the key did not exist.
      */
     public function get($key) {
-        $maxtime = cache::now() - $this->ttl;
-        if (array_key_exists($key, $this->store)) {
+        if (isset($this->store[$key])) {
             if ($this->ttl == 0) {
-                return $this->store[$key];
-            } else if ($this->store[$key][1] >= $maxtime) {
+                return $this->store[$key][0];
+            } else if ($this->store[$key][1] >= (cache::now() - $this->ttl)) {
                 return $this->store[$key][0];
             }
         }
@@ -199,12 +235,15 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      */
     public function get_many($keys) {
         $return = array();
-        $maxtime = cache::now() - $this->ttl;
+        if ($this->ttl != 0) {
+            $maxtime = cache::now() - $this->ttl;
+        }
+
         foreach ($keys as $key) {
             $return[$key] = false;
-            if (array_key_exists($key, $this->store)) {
+            if (isset($this->store[$key])) {
                 if ($this->ttl == 0) {
-                    $return[$key] = $this->store[$key];
+                    $return[$key] = $this->store[$key][0];
                 } else if ($this->store[$key][1] >= $maxtime) {
                     $return[$key] = $this->store[$key][0];
                 }
@@ -222,7 +261,7 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      */
     public function set($key, $data) {
         if ($this->ttl == 0) {
-            $this->store[$key] = $data;
+            $this->store[$key][0] = $data;
         } else {
             $this->store[$key] = array($data, cache::now());
         }
@@ -253,11 +292,10 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      * @return bool
      */
     public function has($key) {
-        $maxtime = cache::now() - $this->ttl;
-        if (array_key_exists($key, $this->store)) {
+        if (isset($this->store[$key])) {
             if ($this->ttl == 0) {
                 return true;
-            } else if ($this->store[$key][1] >= $maxtime) {
+            } else if ($this->store[$key][1] >= (cache::now() - $this->ttl)) {
                 return true;
             }
         }
@@ -271,9 +309,12 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      * @return bool
      */
     public function has_all(array $keys) {
-        $maxtime = cache::now() - $this->ttl;
+        if ($this->ttl != 0) {
+            $maxtime = cache::now() - $this->ttl;
+        }
+
         foreach ($keys as $key) {
-            if (!array_key_exists($key, $this->store)) {
+            if (!isset($this->store[$key])) {
                 return false;
             }
             if ($this->ttl != 0 && $this->store[$key][1] < $maxtime) {
@@ -290,9 +331,12 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      * @return bool
      */
     public function has_any(array $keys) {
-        $maxtime = cache::now() - $this->ttl;
+        if ($this->ttl != 0) {
+            $maxtime = cache::now() - $this->ttl;
+        }
+
         foreach ($keys as $key) {
-            if (array_key_exists($key, $this->store) && ($this->ttl == 0 || $this->store[$key][1] >= $maxtime)) {
+            if (isset($this->store[$key]) && ($this->ttl == 0 || $this->store[$key][1] >= $maxtime)) {
                 return true;
             }
         }
@@ -332,6 +376,8 @@ class cachestore_static extends static_data_store implements cache_store, cache_
      */
     public function purge() {
         $this->flush_store_by_id($this->storeid);
+        $this->store = &self::register_store_id($this->storeid);
+        return true;
     }
 
     /**
@@ -346,7 +392,7 @@ class cachestore_static extends static_data_store implements cache_store, cache_
     /**
      * Performs any necessary clean up when the store instance is being deleted.
      */
-    public function cleanup() {
+    public function instance_deleted() {
         $this->purge();
     }
 
@@ -370,56 +416,28 @@ class cachestore_static extends static_data_store implements cache_store, cache_
     public function my_name() {
         return $this->name;
     }
-}
-
-/**
- * The static data store class
- *
- * @copyright  2012 Sam Hemelryk
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-abstract class static_data_store {
 
     /**
-     * An array for storage.
-     * @var array
-     */
-    private static $staticstore = array();
-
-    /**
-     * Returns a static store by reference... REFERENCE SUPER IMPORTANT.
+     * Finds all of the keys being stored in the cache store instance.
      *
-     * @param string $id
      * @return array
      */
-    protected static function &register_store_id($id) {
-        if (!array_key_exists($id, self::$staticstore)) {
-            self::$staticstore[$id] = array();
-        }
-        return self::$staticstore[$id];
+    public function find_all() {
+        return array_keys($this->store);
     }
 
     /**
-     * Flushes the store of all values for belonging to the store with the given id.
-     * @param string $id
-     */
-    protected static function flush_store_by_id($id) {
-        unset(self::$staticstore[$id]);
-        self::$staticstore[$id] = array();
-    }
-
-    /**
-     * Flushes all of the values from all stores.
+     * Finds all of the keys whose keys start with the given prefix.
      *
-     * @copyright  2012 Sam Hemelryk
-     * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+     * @param string $prefix
      */
-    protected static function flush_store() {
-        $ids = array_keys(self::$staticstore);
-        unset(self::$staticstore);
-        self::$staticstore = array();
-        foreach ($ids as $id) {
-            self::$staticstore[$id] = array();
+    public function find_by_prefix($prefix) {
+        $return = array();
+        foreach ($this->find_all() as $key) {
+            if (strpos($key, $prefix) === 0) {
+                $return[] = $key;
+            }
         }
+        return $return;
     }
 }

@@ -30,12 +30,13 @@ $definitions = array(
 
     // Used to store processed lang files.
     // The keys used are the component of the string file.
+    // The persistent max size has been based upon student access of the site.
     'string' => array(
         'mode' => cache_store::MODE_APPLICATION,
         'simplekeys' => true,
         'simpledata' => true,
-        'persistent' => true,
-        'persistentmaxsize' => 3
+        'staticacceleration' => true,
+        'staticaccelerationsize' => 30
     ),
 
     // Used to store database meta information.
@@ -47,20 +48,8 @@ $definitions = array(
         'requireidentifiers' => array(
             'dbfamily'
         ),
-        'persistent' => true,
-        'persistentmaxsize' => 2
-    ),
-
-    // Used to store data from the config + config_plugins table in the database.
-    // The key used is the component:
-    //   - core for all core config settings
-    //   - plugin component for all plugin settings.
-    // Persistence is used because normally several settings within a script.
-    'config' => array(
-        'mode' => cache_store::MODE_APPLICATION,
-        'persistent' => true,
-        'simplekeys' => true,
-        'simpledata' => true
+        'staticacceleration' => true,
+        'staticaccelerationsize' => 15
     ),
 
     // Event invalidation cache.
@@ -72,7 +61,7 @@ $definitions = array(
     // cache will likely be used either lots or never.
     'eventinvalidation' => array(
         'mode' => cache_store::MODE_APPLICATION,
-        'persistent' => true,
+        'staticacceleration' => true,
         'requiredataguarantee' => true,
         'simpledata' => true,
     ),
@@ -87,4 +76,12 @@ $definitions = array(
         'datasource' => 'question_finder',
         'datasourcefile' => 'question/engine/bank.php',
     ),
+
+    // HTML Purifier cache
+    // This caches the html purifier cleaned text. This is done because the text is usually cleaned once for every user
+    // and context combo. Text caching handles caching for the combination, this cache is responsible for caching the
+    // cleaned text which is shareable.
+    'htmlpurifier' => array(
+        'mode' => cache_store::MODE_APPLICATION,
+    )
 );

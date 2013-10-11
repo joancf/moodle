@@ -493,8 +493,10 @@ class file_storage {
     protected function sort_area_tree($tree) {
         foreach ($tree as $key => &$value) {
             if ($key == 'subdirs') {
-                $value = $this->sort_area_tree($value);
                 collatorlib::ksort($value, collatorlib::SORT_NATURAL);
+                foreach ($value as $subdirname => &$subtree) {
+                    $subtree = $this->sort_area_tree($subtree);
+                }
             } else if ($key == 'files') {
                 collatorlib::ksort($value, collatorlib::SORT_NATURAL);
             }
@@ -1852,8 +1854,8 @@ class file_storage {
         $referencehash = sha1($reference);
 
         $sql = "SELECT repositoryid, id FROM {files_reference}
-                 WHERE referencehash = ? and reference = ?";
-        $rs = $DB->get_recordset_sql($sql, array($referencehash, $reference));
+                 WHERE referencehash = ?";
+        $rs = $DB->get_recordset_sql($sql, array($referencehash));
 
         $now = time();
         foreach ($rs as $record) {

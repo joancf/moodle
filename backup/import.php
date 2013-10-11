@@ -11,6 +11,8 @@ require_once($CFG->dirroot . '/backup/util/ui/import_extensions.php');
 $courseid = required_param('id', PARAM_INT);
 // The id of the course we are importing FROM (will only be set if past first stage
 $importcourseid = optional_param('importid', false, PARAM_INT);
+// We just want to check if a search has been run. True if anything is there.
+$searchcourses = optional_param('searchcourses', false, PARAM_BOOL);
 // The target method for the restore (adding or deleting)
 $restoretarget = optional_param('target', backup::TARGET_CURRENT_ADDING, PARAM_INT);
 
@@ -36,7 +38,7 @@ $PAGE->set_pagelayout('incourse');
 $renderer = $PAGE->get_renderer('core','backup');
 
 // Check if we already have a import course id
-if ($importcourseid === false) {
+if ($importcourseid === false || $searchcourses) {
     // Obviously not... show the selector so one can be chosen
     $url = new moodle_url('/backup/import.php', array('id'=>$courseid));
     $search = new import_course_search(array('url'=>$url));
@@ -111,31 +113,46 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
     // Mark the UI finished.
     $rc->finish_ui();
     // Execute prechecks
+    $warnings = false;
     if (!$rc->execute_precheck()) {
         $precheckresults = $rc->get_precheck_results();
-        if (is_array($precheckresults) && !empty($precheckresults['errors'])) {
-            fulldelete($tempdestination);
+        if (is_array($precheckresults)) {
+            if (!empty($precheckresults['errors'])) { // If errors are found, terminate the import.
+                fulldelete($tempdestination);
 
-            echo $OUTPUT->header();
-            echo $renderer->precheck_notices($precheckresults);
-            echo $OUTPUT->continue_button(new moodle_url('/course/view.php', array('id'=>$course->id)));
-            echo $OUTPUT->footer();
-            die();
+                echo $OUTPUT->header();
+                echo $renderer->precheck_notices($precheckresults);
+                echo $OUTPUT->continue_button(new moodle_url('/course/view.php', array('id'=>$course->id)));
+                echo $OUTPUT->footer();
+                die();
+            }
+            if (!empty($precheckresults['warnings'])) { // If warnings are found, go ahead but display warnings later.
+                $warnings = $precheckresults['warnings'];
+            }
         }
-    } else {
-        if ($restoretarget == backup::TARGET_CURRENT_DELETING || $restoretarget == backup::TARGET_EXISTING_DELETING) {
-            restore_dbops::delete_course_content($course->id);
-        }
-        // Execute the restore
-        $rc->execute_plan();
     }
+    if ($restoretarget == backup::TARGET_CURRENT_DELETING || $restoretarget == backup::TARGET_EXISTING_DELETING) {
+        restore_dbops::delete_course_content($course->id);
+    }
+    // Execute the restore.
+    $rc->execute_plan();
 
     // Delete the temp directory now
     fulldelete($tempdestination);
 
     // Display a notification and a continue button
     echo $OUTPUT->header();
-    echo $OUTPUT->notification(get_string('importsuccess', 'backup'),'notifysuccess');
+    if ($warnings) {
+        echo $OUTPUT->box_start();
+        echo $OUTPUT->notification(get_string('warning'), 'notifywarning');
+        echo html_writer::start_tag('ul', array('class'=>'list'));
+        foreach ($warnings as $warning) {
+            echo html_writer::tag('li', $warning);
+        }
+        echo html_writer::end_tag('ul');
+        echo $OUTPUT->box_end();
+    }
+    echo $OUTPUT->notification(get_string('importsuccess', 'backup'), 'notifysuccess');
     echo $OUTPUT->continue_button(new moodle_url('/course/view.php', array('id'=>$course->id)));
     echo $OUTPUT->footer();
 
@@ -154,7 +171,7 @@ $PAGE->navbar->add($backup->get_stage_name());
 // Display the current stage
 echo $OUTPUT->header();
 if ($backup->enforce_changed_dependencies()) {
-    echo $renderer->dependency_notification(get_string('dependenciesenforced','backup'));
+    debugging('Your settings have been altered due to unmet dependencies', DEBUG_DEVELOPER);
 }
 echo $renderer->progress_bar($backup->get_progress_bar());
 echo $backup->display($renderer);
